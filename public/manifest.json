@@ -1,0 +1,15 @@
+{
+  "short_name": "To Find Crew",
+  "name": "To Find Crew",
+  "icons": [
+    {
+      "src": "/icons/icon_to_find_crew.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1E3A8A"
+}
