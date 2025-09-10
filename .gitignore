@@ -49,3 +49,4 @@ next-env.d.ts
 /public/worker-*.js.map
 
 .cursor
+CLAUDE.md
