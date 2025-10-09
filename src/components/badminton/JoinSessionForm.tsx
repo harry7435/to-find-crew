@@ -68,11 +68,11 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
 
       // 성공 응답 처리 (신규 가입 또는 이미 가입한 경우 모두)
       if (result.already_joined) {
-        toast.success('이미 참가한 세션입니다', {
+        toast.success('이미 참가한 번개 모임입니다', {
           description: `${result.session.name}으로 이동합니다`,
         });
       } else {
-        toast.success('세션에 참가했습니다!', {
+        toast.success('번개 모임에 참가했습니다!', {
           description: `${result.session.name}에 참가하셨습니다`,
         });
       }
@@ -92,10 +92,10 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
             errorMessage = '유효하지 않은 접근 코드입니다';
             break;
           case 'Session is full':
-            errorMessage = '세션이 가득 찼습니다';
+            errorMessage = '번개 모임이 가득 찼습니다';
             break;
           case 'Session has ended':
-            errorMessage = '종료된 세션입니다';
+            errorMessage = '종료된 번개 모임입니다';
             break;
           case 'Authentication required':
             errorMessage = '로그인이 필요합니다';
@@ -105,7 +105,7 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
         }
       }
 
-      toast.error('세션 참가에 실패했습니다', {
+      toast.error('번개 모임 참가에 실패했습니다', {
         description: errorMessage,
       });
     } finally {
@@ -123,7 +123,7 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle className="text-center">🏸 세션 참가</CardTitle>
+        <CardTitle className="text-center">🏸 번개 모임 참가</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -143,7 +143,7 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading || accessCode.length !== 6}>
-            {isLoading ? '참가 중...' : '세션 참가하기'}
+            {isLoading ? '참가 중...' : '번개 모임 참가하기'}
           </Button>
 
           <div className="text-sm text-gray-600 space-y-1">
@@ -152,7 +152,7 @@ export default function JoinSessionForm({ onSuccess }: JoinSessionFormProps) {
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4 text-xs">
               <li>프로필에 성별과 실력 정보가 입력되어 있어야 합니다</li>
-              <li>세션 시작 후에는 팀 배정이 이루어집니다</li>
+              <li>번개 모임 시작 후에는 팀 배정이 이루어집니다</li>
               <li>공정한 게임을 위해 정확한 실력 정보를 입력해주세요</li>
             </ul>
           </div>

@@ -36,7 +36,7 @@ export default function SessionDetailPage() {
       setSession(result.session);
     } catch (error) {
       console.error('Session fetch error:', error);
-      setError(error instanceof Error ? error.message : '세션을 불러올 수 없습니다');
+      setError(error instanceof Error ? error.message : '번개 모임을 불러올 수 없습니다');
     } finally {
       setIsLoading(false);
     }
@@ -127,7 +127,7 @@ export default function SessionDetailPage() {
     if (session) {
       const shareData = {
         title: `🏸 ${session.name}`,
-        text: `배드민턴 세션에 참가하세요!\n체육관: ${session.venue_name}\n접근코드: ${session.access_code}`,
+        text: `배드민턴 번개 모임에 참가하세요!\n체육관: ${session.venue_name}\n접근코드: ${session.access_code}`,
         url: window.location.href,
       };
 
@@ -172,7 +172,7 @@ export default function SessionDetailPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-gray-600">세션 정보를 불러오는 중...</p>
+          <p className="mt-2 text-gray-600">번개 모임 정보를 불러오는 중...</p>
         </div>
       </div>
     );
@@ -182,7 +182,7 @@ export default function SessionDetailPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error || '세션을 찾을 수 없습니다'}</p>
+          <p className="text-red-600 mb-4">{error || '번개 모임을 찾을 수 없습니다'}</p>
           <Link href="/badminton/join">
             <Button>다시 시도하기</Button>
           </Link>
@@ -219,7 +219,7 @@ export default function SessionDetailPage() {
           </div>
         </div>
 
-        {/* 세션 정보 카드 */}
+        {/* 번개 모임 정보 카드 */}
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-start justify-between">
@@ -265,7 +265,7 @@ export default function SessionDetailPage() {
               <div className="flex gap-2 pt-4 border-t">
                 <Button variant="outline" size="sm">
                   <Settings className="h-4 w-4 mr-2" />
-                  세션 관리
+                  번개 모임 관리
                 </Button>
 
                 {session.status === 'open' &&

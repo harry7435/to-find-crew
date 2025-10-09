@@ -12,7 +12,7 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 
 const sessionSchema = z.object({
-  name: z.string().min(2, '세션 이름은 최소 2자 이상이어야 합니다'),
+  name: z.string().min(2, '번개 모임 이름은 최소 2자 이상이어야 합니다'),
   venue_name: z.string().min(2, '체육관 이름은 최소 2자 이상이어야 합니다'),
   session_date: z.string().min(1, '날짜를 선택해주세요'),
   max_participants: z.number().min(4, '최소 4명 이상이어야 합니다').max(40, '최대 40명까지 가능합니다'),
@@ -58,7 +58,7 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
         throw new Error(result.error || 'Failed to create session');
       }
 
-      toast.success('배드민턴 세션이 생성되었습니다!', {
+      toast.success('배드민턴 번개 모임이 생성되었습니다!', {
         description: `접근 코드: ${result.session.access_code}`,
       });
 
@@ -69,7 +69,7 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
       }
     } catch (error) {
       console.error('Session creation error:', error);
-      toast.error('세션 생성에 실패했습니다', {
+      toast.error('번개 모임 생성에 실패했습니다', {
         description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
       });
     } finally {
@@ -85,13 +85,13 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-center">🏸 배드민턴 세션 생성</CardTitle>
+        <CardTitle className="text-center">🏸 배드민턴 번개 모임 생성</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">세션 이름 *</Label>
+              <Label htmlFor="name">번개 모임 이름 *</Label>
               <Input id="name" placeholder="예: 저녁 배드민턴" {...register('name')} disabled={isLoading} />
               {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
             </div>
@@ -109,7 +109,7 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="session_date">세션 날짜 및 시간 *</Label>
+            <Label htmlFor="session_date">번개 모임 날짜 및 시간 *</Label>
             <Input
               id="session_date"
               type="datetime-local"
@@ -150,7 +150,7 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
 
           <div className="pt-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? '생성 중...' : '세션 생성하기'}
+              {isLoading ? '생성 중...' : '번개 모임 생성하기'}
             </Button>
           </div>
 
@@ -159,7 +159,7 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
               💡 <strong>팁:</strong>
             </p>
             <ul className="list-inside space-y-1 ml-2">
-              <li>- 세션 생성 후 자동으로 생성되는 접근 코드를 참가자들과 공유하세요</li>
+              <li>- 번개 모임 생성 후 자동으로 생성되는 접근 코드를 참가자들과 공유하세요</li>
               <li>- 참가자들은 성별과 실력 정보가 있어야 참가할 수 있습니다</li>
               <li>- 코트 수는 나중에 팀 배정 시 활용됩니다</li>
             </ul>

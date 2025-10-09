@@ -53,12 +53,12 @@ export default function Header() {
               {/* <div className="hidden md:flex items-center gap-2">
                 <Link href="/badminton/create">
                   <Button variant="outline" size="sm">
-                    세션 만들기
+                    번개 모임 만들기
                   </Button>
                 </Link>
                 <Link href="/badminton/join">
                   <Button variant="outline" size="sm">
-                    세션 참가
+                    번개 모임 참가
                   </Button>
                 </Link>
               </div> */}
@@ -94,10 +94,10 @@ export default function Header() {
                   {/* 모바일에서만 보이는 배드민턴 메뉴 */}
                   <div className="md:hidden">
                     <Link href="/badminton/create">
-                      <DropdownMenuItem>세션 만들기</DropdownMenuItem>
+                      <DropdownMenuItem>번개 모임 만들기</DropdownMenuItem>
                     </Link>
                     <Link href="/badminton/join">
-                      <DropdownMenuItem>세션 참가</DropdownMenuItem>
+                      <DropdownMenuItem>번개 모임 참가</DropdownMenuItem>
                     </Link>
                     <DropdownMenuSeparator />
                   </div>

@@ -14,7 +14,7 @@ export default function Home() {
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             관심사가 비슷한 사람들과 크루를 만들고
             <br />
-            모임을 주선할 수 있는 플랫폼
+            번개 모임을 운영해보세요
           </p>
           {/* <div className="flex gap-4 justify-center">
           <Button size="lg">크루 찾기</Button>
@@ -112,7 +112,7 @@ export default function Home() {
         </section>
 
         {/* CTA Section */}
-        <section className="container mx-auto px-4 py-16 text-center">
+        {/* <section className="container mx-auto px-4 py-16 text-center">
           <Card className="max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle className="text-2xl">지금 시작하세요!</CardTitle>
@@ -124,7 +124,7 @@ export default function Home() {
               </Button>
             </CardContent>
           </Card>
-        </section>
+        </section> */}
       </main>
     </>
   );
