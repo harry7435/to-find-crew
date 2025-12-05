@@ -101,6 +101,18 @@ CREATE TABLE session_participants (
   UNIQUE(session_id, user_id)
 );
 
+-- Guest participants table (for non-authenticated users)
+CREATE TABLE guest_participants (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  gender TEXT NOT NULL CHECK (gender IN ('male', 'female')),
+  skill_level INTEGER NOT NULL CHECK (skill_level BETWEEN 0 AND 5),
+  age_group TEXT NOT NULL CHECK (age_group IN ('10s', '20s', '30s', '40s', '50s', '60s')),
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  games_played INTEGER DEFAULT 0
+);
+
 -- Teams table for badminton sessions
 CREATE TABLE teams (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -149,6 +161,7 @@ CREATE INDEX idx_badminton_sessions_creator_id ON badminton_sessions(creator_id)
 CREATE INDEX idx_badminton_sessions_session_date ON badminton_sessions(session_date);
 CREATE INDEX idx_session_participants_session_id ON session_participants(session_id);
 CREATE INDEX idx_session_participants_user_id ON session_participants(user_id);
+CREATE INDEX idx_guest_participants_session_id ON guest_participants(session_id);
 CREATE INDEX idx_teams_session_id ON teams(session_id);
 CREATE INDEX idx_team_members_team_id ON team_members(team_id);
 CREATE INDEX idx_games_session_id ON games(session_id);
@@ -164,6 +177,7 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 -- Enable RLS for badminton tables
 ALTER TABLE badminton_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE session_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guest_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
@@ -301,8 +315,24 @@ CREATE POLICY "Users can leave sessions themselves" ON session_participants FOR 
 -- Session creators can manage participants
 CREATE POLICY "Session creators can manage participants" ON session_participants FOR ALL USING (
   EXISTS (
-    SELECT 1 FROM badminton_sessions bs 
-    WHERE bs.id = session_participants.session_id 
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = session_participants.session_id
+    AND bs.creator_id::text = auth.uid()::text
+  )
+);
+
+-- Guest participants policies
+-- Anyone can read guest participants
+CREATE POLICY "Anyone can read guest participants" ON guest_participants FOR SELECT USING (true);
+
+-- Anyone can add guest participants (no authentication required)
+CREATE POLICY "Anyone can add guest participants" ON guest_participants FOR INSERT WITH CHECK (true);
+
+-- Session creators can manage guest participants
+CREATE POLICY "Session creators can manage guest participants" ON guest_participants FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = guest_participants.session_id
     AND bs.creator_id::text = auth.uid()::text
   )
 );

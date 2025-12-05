@@ -266,6 +266,38 @@ export interface Database {
           games_played?: number;
         };
       };
+      guest_participants: {
+        Row: {
+          id: string;
+          session_id: string;
+          name: string;
+          gender: 'male' | 'female';
+          skill_level: number;
+          age_group: '10s' | '20s' | '30s' | '40s' | '50s' | '60s';
+          joined_at: string;
+          games_played: number;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          name: string;
+          gender: 'male' | 'female';
+          skill_level: number;
+          age_group: '10s' | '20s' | '30s' | '40s' | '50s' | '60s';
+          joined_at?: string;
+          games_played?: number;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          name?: string;
+          gender?: 'male' | 'female';
+          skill_level?: number;
+          age_group?: '10s' | '20s' | '30s' | '40s' | '50s' | '60s';
+          joined_at?: string;
+          games_played?: number;
+        };
+      };
       teams: {
         Row: {
           id: string;

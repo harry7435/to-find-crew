@@ -17,6 +17,7 @@ export interface BadmintonSession {
     profile_image?: string;
   };
   session_participants?: SessionParticipant[];
+  guest_participants?: GuestParticipant[];
   teams?: Team[];
 }
 
@@ -34,6 +35,17 @@ export interface SessionParticipant {
     gender?: 'male' | 'female' | 'other';
     skill_level?: number;
   };
+}
+
+export interface GuestParticipant {
+  id: string;
+  session_id: string;
+  name: string;
+  gender: 'male' | 'female';
+  skill_level: number;
+  age_group: '10s' | '20s' | '30s' | '40s' | '50s' | '60s';
+  joined_at: string;
+  games_played: number;
 }
 
 export interface Team {
@@ -80,6 +92,14 @@ export interface CreateSessionData {
 
 export interface JoinSessionData {
   access_code: string;
+}
+
+export interface GuestJoinSessionData {
+  access_code: string;
+  name: string;
+  gender: 'male' | 'female';
+  skill_level: number;
+  age_group: '10s' | '20s' | '30s' | '40s' | '50s' | '60s';
 }
 
 export interface UserProfile {
