@@ -9,10 +9,11 @@ import ParticipantsList from '@/components/badminton/ParticipantsList';
 import AuthGuard from '@/components/auth/AuthGuard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
-import { ArrowLeft, Calendar, MapPin, Users, Copy, Share2 } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Copy, Share2, QrCode } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -23,6 +24,7 @@ export default function SessionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [showQRCode, setShowQRCode] = useState(false);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -123,6 +125,14 @@ export default function SessionDetailPage() {
     }
   };
 
+  const copyInviteLink = () => {
+    if (session?.access_code) {
+      const inviteUrl = `${window.location.origin}/badminton/invite/${session.access_code}`;
+      navigator.clipboard.writeText(inviteUrl);
+      toast.success('초대 링크가 복사되었습니다!');
+    }
+  };
+
   const shareSession = async () => {
     if (session) {
       const shareData = {
@@ -212,12 +222,45 @@ export default function SessionDetailPage() {
           </Link>
 
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowQRCode(!showQRCode)}>
+              <QrCode className="h-4 w-4 mr-2" />
+              QR 코드
+            </Button>
             <Button variant="outline" size="sm" onClick={shareSession}>
               <Share2 className="h-4 w-4 mr-2" />
               공유
             </Button>
           </div>
         </div>
+
+        {/* QR 코드 섹션 */}
+        {showQRCode && session && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg">QR 코드로 참가하기</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center space-y-4">
+                <div className="p-4 bg-white rounded-lg border-2">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/badminton/invite/${session.access_code}`}
+                    size={256}
+                    level="H"
+                  />
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="text-sm text-gray-600">QR 코드를 스캔하면 바로 참가할 수 있습니다</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={copyInviteLink}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      초대 링크 복사
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 번개 모임 정보 카드 */}
         <Card className="mb-6">
@@ -283,6 +326,7 @@ export default function SessionDetailPage() {
         {/* 참가자 목록 */}
         <ParticipantsList
           participants={session.session_participants || []}
+          guestParticipants={session.guest_participants || []}
           creatorId={session.creator_id}
           maxParticipants={session.max_participants}
         />
