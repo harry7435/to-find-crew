@@ -3,29 +3,51 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SessionParticipant } from '@/types/badminton';
-import { Users, Crown, Trophy } from 'lucide-react';
+import { SessionParticipant, GuestParticipant } from '@/types/badminton';
+import { Users, Crown, Trophy, UserCircle } from 'lucide-react';
 
 interface ParticipantsListProps {
   participants: SessionParticipant[];
+  guestParticipants?: GuestParticipant[];
   creatorId: string;
   maxParticipants: number;
 }
 
 const getSkillLevelText = (level: number) => {
   switch (level) {
+    case 0:
+      return 'E급';
     case 1:
-      return '초급';
+      return 'D급';
     case 2:
-      return '초중급';
+      return 'C급';
     case 3:
-      return '중급';
+      return 'B급';
     case 4:
-      return '중상급';
+      return 'A급';
     case 5:
-      return '상급';
+      return 'S급';
     default:
       return '미설정';
+  }
+};
+
+const getAgeGroupText = (ageGroup: string) => {
+  switch (ageGroup) {
+    case '10s':
+      return '10대';
+    case '20s':
+      return '20대';
+    case '30s':
+      return '30대';
+    case '40s':
+      return '40대';
+    case '50s':
+      return '50대';
+    case '60s':
+      return '60대+';
+    default:
+      return '';
   }
 };
 
@@ -57,7 +79,12 @@ const getGenderIcon = (gender: string) => {
   }
 };
 
-export default function ParticipantsList({ participants, creatorId, maxParticipants }: ParticipantsListProps) {
+export default function ParticipantsList({
+  participants,
+  guestParticipants = [],
+  creatorId,
+  maxParticipants,
+}: ParticipantsListProps) {
   const sortedParticipants = [...participants].sort((a, b) => {
     // 생성자를 맨 위로
     if (a.user.id === creatorId) return -1;
@@ -67,18 +94,25 @@ export default function ParticipantsList({ participants, creatorId, maxParticipa
     return new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime();
   });
 
-  const genderCount = participants.reduce(
+  const sortedGuestParticipants = [...guestParticipants].sort(
+    (a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime(),
+  );
+
+  const totalParticipants = participants.length + guestParticipants.length;
+
+  // 통계 계산 (일반 참가자 + 게스트)
+  const genderCount = [...participants, ...guestParticipants].reduce(
     (acc, p) => {
-      const gender = p.user.gender || 'unknown';
+      const gender = 'user' in p ? p.user.gender || 'unknown' : p.gender;
       acc[gender] = (acc[gender] || 0) + 1;
       return acc;
     },
     {} as Record<string, number>,
   );
 
-  const skillLevelCount = participants.reduce(
+  const skillLevelCount = [...participants, ...guestParticipants].reduce(
     (acc, p) => {
-      const level = p.user.skill_level || 0;
+      const level = 'user' in p ? p.user.skill_level || 0 : p.skill_level;
       acc[level] = (acc[level] || 0) + 1;
       return acc;
     },
@@ -90,7 +124,7 @@ export default function ParticipantsList({ participants, creatorId, maxParticipa
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          참가자 목록 ({participants.length}/{maxParticipants})
+          참가자 목록 ({totalParticipants}/{maxParticipants})
         </CardTitle>
 
         {/* 참가자 통계 */}
@@ -116,6 +150,7 @@ export default function ParticipantsList({ participants, creatorId, maxParticipa
 
       <CardContent>
         <div className="space-y-3">
+          {/* 일반 참가자 (인증된 사용자) */}
           {sortedParticipants.map((participant) => {
             const isCreator = participant.user.id === creatorId;
             const joinTime = new Date(participant.joined_at).toLocaleString('ko-KR', {
@@ -168,7 +203,60 @@ export default function ParticipantsList({ participants, creatorId, maxParticipa
             );
           })}
 
-          {participants.length === 0 && (
+          {/* 게스트 참가자 */}
+          {sortedGuestParticipants.map((guest) => {
+            const joinTime = new Date(guest.joined_at).toLocaleString('ko-KR', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return (
+              <div
+                key={guest.id}
+                className="flex items-center gap-3 p-3 rounded-lg border bg-blue-50 hover:bg-blue-100 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-blue-200 flex items-center justify-center">
+                  <UserCircle className="h-6 w-6 text-blue-600" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900 truncate">{guest.name}</p>
+                    <Badge variant="outline" className="text-xs bg-white">
+                      게스트
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm text-gray-500">{getGenderIcon(guest.gender)}</span>
+
+                    <Badge variant="secondary" className={`text-xs ${getSkillLevelColor(guest.skill_level)}`}>
+                      {getSkillLevelText(guest.skill_level)}
+                    </Badge>
+
+                    <Badge variant="outline" className="text-xs bg-white">
+                      {getAgeGroupText(guest.age_group)}
+                    </Badge>
+
+                    {guest.games_played > 0 && (
+                      <Badge variant="outline" className="text-xs bg-white">
+                        <Trophy className="h-3 w-3 mr-1" />
+                        {guest.games_played}게임
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">{joinTime}</p>
+                </div>
+              </div>
+            );
+          })}
+
+          {totalParticipants === 0 && (
             <div className="text-center py-8 text-gray-500">
               <Users className="h-12 w-12 mx-auto mb-2 text-gray-300" />
               <p>아직 참가자가 없습니다</p>
@@ -176,9 +264,9 @@ export default function ParticipantsList({ participants, creatorId, maxParticipa
             </div>
           )}
 
-          {participants.length < maxParticipants && (
+          {totalParticipants < maxParticipants && totalParticipants > 0 && (
             <div className="text-center py-4">
-              <p className="text-sm text-gray-500">{maxParticipants - participants.length}명 더 참가할 수 있습니다</p>
+              <p className="text-sm text-gray-500">{maxParticipants - totalParticipants}명 더 참가할 수 있습니다</p>
             </div>
           )}
         </div>
