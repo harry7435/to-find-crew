@@ -3,14 +3,20 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { SessionParticipant, GuestParticipant } from '@/types/badminton';
-import { Users, Crown, Trophy, UserCircle } from 'lucide-react';
+import { Users, Crown, Trophy, UserCircle, UserX } from 'lucide-react';
+import { toast } from 'sonner';
+import { useState } from 'react';
 
 interface ParticipantsListProps {
   participants: SessionParticipant[];
   guestParticipants?: GuestParticipant[];
   creatorId: string;
   maxParticipants: number;
+  currentUserId?: string;
+  sessionId: string;
+  onParticipantRemoved?: () => void;
 }
 
 const getSkillLevelText = (level: number) => {
@@ -84,7 +90,35 @@ export default function ParticipantsList({
   guestParticipants = [],
   creatorId,
   maxParticipants,
+  currentUserId,
+  sessionId,
+  onParticipantRemoved,
 }: ParticipantsListProps) {
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const isCreator = currentUserId === creatorId;
+
+  // API 호출 함수
+  const removeParticipantApi = async (sessionId: string, participantId: string, participantType: 'user' | 'guest') => {
+    const response = await fetch('/api/badminton/sessions/remove-participant', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        participant_id: participantId,
+        participant_type: participantType,
+      }),
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || 'Failed to remove participant');
+    }
+
+    return response.json();
+  };
+
   const sortedParticipants = [...participants].sort((a, b) => {
     // 생성자를 맨 위로
     if (a.user.id === creatorId) return -1;
@@ -119,6 +153,26 @@ export default function ParticipantsList({
     {} as Record<number, number>,
   );
 
+  const handleRemoveParticipant = async (participantId: string, participantType: 'user' | 'guest') => {
+    if (!confirm('정말 이 참가자를 퇴장시키겠습니까?')) {
+      return;
+    }
+
+    setRemovingId(participantId);
+    try {
+      await removeParticipantApi(sessionId, participantId, participantType);
+      toast.success('참가자가 퇴장되었습니다');
+      onParticipantRemoved?.();
+    } catch (error) {
+      console.error('Remove participant error:', error);
+      toast.error('참가자 퇴장에 실패했습니다', {
+        description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
+      });
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -152,7 +206,7 @@ export default function ParticipantsList({
         <div className="space-y-3">
           {/* 일반 참가자 (인증된 사용자) */}
           {sortedParticipants.map((participant) => {
-            const isCreator = participant.user.id === creatorId;
+            const isParticipantCreator = participant.user.id === creatorId;
             const joinTime = new Date(participant.joined_at).toLocaleString('ko-KR', {
               month: 'short',
               day: 'numeric',
@@ -173,7 +227,7 @@ export default function ParticipantsList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-gray-900 truncate">{participant.user.name}</p>
-                    {isCreator && <Crown className="h-4 w-4 text-yellow-500" />}
+                    {isParticipantCreator && <Crown className="h-4 w-4 text-yellow-500" />}
                   </div>
 
                   <div className="flex items-center gap-2 mt-1">
@@ -195,9 +249,24 @@ export default function ParticipantsList({
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">{joinTime}</p>
-                  {isCreator && <p className="text-xs text-yellow-600 font-medium">관리자</p>}
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">{joinTime}</p>
+                    {isParticipantCreator && <p className="text-xs text-yellow-600 font-medium">관리자</p>}
+                  </div>
+
+                  {/* 관리자 전용: 퇴장 버튼 (생성자는 퇴장 불가) */}
+                  {isCreator && !isParticipantCreator && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveParticipant(participant.id, 'user')}
+                      disabled={removingId === participant.id}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <UserX className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -249,8 +318,23 @@ export default function ParticipantsList({
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">{joinTime}</p>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">{joinTime}</p>
+                  </div>
+
+                  {/* 관리자 전용: 게스트 퇴장 버튼 */}
+                  {isCreator && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveParticipant(guest.id, 'guest')}
+                      disabled={removingId === guest.id}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <UserX className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
