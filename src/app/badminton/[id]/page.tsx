@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ParticipantsList from '@/components/badminton/ParticipantsList';
-import AuthGuard from '@/components/auth/AuthGuard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
-import { ArrowLeft, Calendar, MapPin, Users, Copy, Share2, QrCode } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { ArrowLeft, Calendar, MapPin, Users, Copy, Share2, QrCode, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +18,7 @@ import { QRCodeSVG } from 'qrcode.react';
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
+  const { user } = useAuth();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,27 +45,23 @@ export default function SessionDetailPage() {
     }
   }, [sessionId]);
 
-  // 프로필 확인 및 모달 표시 로직
+  // 프로필 확인 및 모달 표시 로직 (로그인한 사용자만)
   const checkUserProfile = useCallback(async () => {
+    if (!user) return;
+
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from('users').select('gender, skill_level').eq('id', user.id).single();
 
-      if (user) {
-        const { data: profile } = await supabase.from('users').select('gender, skill_level').eq('id', user.id).single();
-
-        // 프로필 정보가 없거나 불완전하면 모달 표시
-        if (!profile || !profile.gender || !profile.skill_level) {
-          setShowUserInfoModal(true);
-        }
+      // 프로필 정보가 없거나 불완전하면 모달 표시
+      if (!profile || !profile.gender || !profile.skill_level) {
+        setShowUserInfoModal(true);
       }
     } catch (error) {
       console.error('Failed to check user profile:', error);
       // 프로필 확인 실패 시에도 모달 표시
       setShowUserInfoModal(true);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchSession();
@@ -210,7 +207,7 @@ export default function SessionDetailPage() {
   });
 
   return (
-    <AuthGuard>
+    <>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* 헤더 */}
         <div className="mb-6 flex items-center justify-between">
@@ -303,23 +300,17 @@ export default function SessionDetailPage() {
               </div>
             </div>
 
-            {/* 관리자 전용 버튼들 */}
-            {/* {session.creator_id && (
-              <div className="flex gap-2 pt-4 border-t">
-                <Button variant="outline" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  번개 모임 관리
-                </Button>
-
-                {session.status === 'open' &&
-                  session.session_participants &&
-                  session.session_participants.length >= 4 && (
-                    <Button size="sm">
-                      <PlayCircle className="h-4 w-4 mr-2" />팀 배정하기
-                    </Button>
-                  )}
+            {/* 관리자 전용 버튼 */}
+            {user && session.creator_id === user.id && (
+              <div className="pt-4 border-t">
+                <Link href={`/badminton/edit/${session.id}`}>
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4 mr-2" />
+                    모임 관리
+                  </Button>
+                </Link>
               </div>
-            )} */}
+            )}
           </CardContent>
         </Card>
 
@@ -329,6 +320,9 @@ export default function SessionDetailPage() {
           guestParticipants={session.guest_participants || []}
           creatorId={session.creator_id}
           maxParticipants={session.max_participants}
+          currentUserId={user?.id}
+          sessionId={session.id}
+          onParticipantRemoved={fetchSession}
         />
 
         {/* 팀 정보 (있는 경우) */}
@@ -360,13 +354,36 @@ export default function SessionDetailPage() {
         )}
       </div>
 
-      {/* 사용자 정보 입력 모달 */}
-      <UserInfoModal
-        isOpen={showUserInfoModal}
-        onClose={() => setShowUserInfoModal(false)}
-        onSubmit={handleUserInfoSubmit}
-        isLoading={isUpdatingProfile}
-      />
-    </AuthGuard>
+      {/* 사용자 정보 입력 모달 (로그인한 사용자만) */}
+      {user && (
+        <UserInfoModal
+          isOpen={showUserInfoModal}
+          onClose={() => setShowUserInfoModal(false)}
+          onSubmit={handleUserInfoSubmit}
+          isLoading={isUpdatingProfile}
+        />
+      )}
+
+      {/* 게스트 사용자 안내 */}
+      {!user && (
+        <Card className="mt-6 border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-3">
+              <p className="text-sm text-blue-800">
+                💡 <strong>게스트로 볼 수 있습니다</strong>
+              </p>
+              <p className="text-xs text-blue-600">
+                로그인하시면 참가 취소, 프로필 관리 등 더 많은 기능을 사용할 수 있습니다.
+              </p>
+              <Link href="/auth/login">
+                <Button size="sm" variant="outline" className="mt-2">
+                  로그인하기
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
   );
 }
