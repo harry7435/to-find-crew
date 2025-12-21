@@ -245,11 +245,11 @@ export default function EditSessionPage() {
               </div>
 
               <div className="pt-4 flex gap-2">
-                <Button type="submit" className="flex-1" disabled={isSaving}>
+                <Button type="submit" className="flex-1 cursor-pointer" disabled={isSaving}>
                   {isSaving ? '저장 중...' : '변경사항 저장'}
                 </Button>
                 <Link href={`/badminton/${sessionId}`} className="flex-1">
-                  <Button type="button" variant="outline" className="w-full" disabled={isSaving}>
+                  <Button type="button" variant="outline" className="w-full cursor-pointer" disabled={isSaving}>
                     취소
                   </Button>
                 </Link>

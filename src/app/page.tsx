@@ -33,7 +33,7 @@ export default function Home() {
                 <CardDescription>번개를 만들어 관리해요</CardDescription>
               </CardHeader>
               <CardContent>
-                <Link href="/badminton/create">
+                <Link href="/badminton/create" className="cursor-pointer">
                   <Button className="w-full">생성</Button>
                 </Link>
               </CardContent>
@@ -45,7 +45,7 @@ export default function Home() {
                 <CardDescription>코드를 입력해서 번개에 참여해요</CardDescription>
               </CardHeader>
               <CardContent>
-                <Link href="/badminton/join">
+                <Link href="/badminton/join" className="cursor-pointer">
                   <Button variant="outline" className="w-full">
                     번개 참여
                   </Button>

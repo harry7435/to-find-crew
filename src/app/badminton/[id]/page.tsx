@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const { user } = useAuth();
+  const router = useRouter();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -211,12 +212,10 @@ export default function SessionDetailPage() {
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* 헤더 */}
         <div className="mb-6 flex items-center justify-between">
-          <Link href="/badminton/join">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              뒤로가기
-            </Button>
-          </Link>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로가기
+          </Button>
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowQRCode(!showQRCode)}>
@@ -304,7 +303,7 @@ export default function SessionDetailPage() {
             {user && session.creator_id === user.id && (
               <div className="pt-4 border-t">
                 <Link href={`/badminton/edit/${session.id}`}>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" />
                     모임 관리
                   </Button>
@@ -376,7 +375,7 @@ export default function SessionDetailPage() {
                 로그인하시면 참가 취소, 프로필 관리 등 더 많은 기능을 사용할 수 있습니다.
               </p>
               <Link href="/auth/login">
-                <Button size="sm" variant="outline" className="mt-2">
+                <Button size="sm" variant="outline" className="mt-2 cursor-pointer">
                   로그인하기
                 </Button>
               </Link>

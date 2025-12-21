@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Header() {
@@ -101,7 +101,14 @@ export default function Header() {
                     </Link>
                     <DropdownMenuSeparator />
                   </div> */}
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/badminton/my-sessions">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      <span>내 모임</span>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/profile">
                       <User className="mr-2 h-4 w-4" />
                       <span>프로필</span>
@@ -110,7 +117,7 @@ export default function Header() {
 
                   <DropdownMenuSeparator />
 
-                  <DropdownMenuItem onClick={handleSignOut}>
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>로그아웃</span>
                   </DropdownMenuItem>
