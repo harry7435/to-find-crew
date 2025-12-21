@@ -7,10 +7,10 @@ export default function Home() {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background pt-16">
+      <main className="min-h-screen pt-16 bg-gradient-to-r from-blue-50 to-green-50">
         {/* Hero Section */}
         <section className="container mx-auto px-4 pt-16 pb-4 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">To Find Crew 🚀</h1>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">To Find Crew 🏸</h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             관심사가 비슷한 사람들과 크루를 만들고
             <br />
@@ -25,12 +25,7 @@ export default function Home() {
         </section>
 
         {/* Badminton Section */}
-        <section className="container mx-auto px-4 py-16 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold mb-4">🏸 배드민턴 번개 모임</h2>
-            <p className="text-lg text-muted-foreground">배드민턴 번개를 만들거나 참여할 수 있어요</p>
-          </div>
-
+        <section className="container mx-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             <Card className="text-center">
               <CardHeader>
@@ -70,61 +65,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
-        {/* Features Section */}
-        <section className="container mx-auto px-4 py-16">
-          <h2 className="text-3xl font-bold text-center mb-12">주요 기능</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">👥 크루 관리</CardTitle>
-                <CardDescription>관심사별로 크루를 생성하고 멤버를 관리하세요</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  운동, 스터디, 취미 등 다양한 카테고리의 크루를 만들고 참여할수 있습니다.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">📅 모임 관리</CardTitle>
-                <CardDescription>크루원들과 함께 모임을 계획하고 참여하세요</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  일정 조율부터 장소 예약까지, 모임의 모든 것을 한 곳에서 관리하세요.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">💬 실시간 채팅</CardTitle>
-                <CardDescription>크루원들과 실시간으로 소통하세요</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">크루별 채팅방에서 정보를 공유하고 친목을 다져보세요.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        {/* <section className="container mx-auto px-4 py-16 text-center">
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle className="text-2xl">지금 시작하세요!</CardTitle>
-              <CardDescription>새로운 사람들을 만나고 즐거운 활동을 함께 해보세요</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button size="lg" className="w-full sm:w-auto">
-                회원가입하기
-              </Button>
-            </CardContent>
-          </Card>
-        </section> */}
       </main>
     </>
   );
