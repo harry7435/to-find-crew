@@ -26,7 +26,7 @@ export default function Home() {
 
         {/* Badminton Section */}
         <section className="container mx-auto p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
             <Card className="text-center">
               <CardHeader>
                 <CardTitle className="text-xl">번개 생성</CardTitle>
@@ -48,6 +48,20 @@ export default function Home() {
                 <Link href="/badminton/join" className="cursor-pointer">
                   <Button variant="outline" className="w-full">
                     번개 참여
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardHeader>
+                <CardTitle className="text-xl">게임 관리</CardTitle>
+                <CardDescription>선수 등록과 랜덤 팀 뽑기</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/game-manager" className="cursor-pointer">
+                  <Button variant="outline" className="w-full">
+                    관리하기
                   </Button>
                 </Link>
               </CardContent>
