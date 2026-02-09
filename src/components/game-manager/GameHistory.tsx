@@ -100,7 +100,7 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
         <TabsTrigger value="stats">통계</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="games" className="space-y-3 mt-4">
+      <TabsContent value="games" className="space-y-2 mt-3">
         {recentGames.map((game, index) => {
           const gameNumber = games.length - index;
           const date = new Date(game.confirmedAt).toLocaleString('ko-KR', {
@@ -111,16 +111,16 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
           });
 
           return (
-            <div key={game.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow relative">
+            <div key={game.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow relative">
               <Button
                 variant="ghost"
                 size="sm"
-                className="absolute top-2 right-2"
+                className="absolute top-1 right-1"
                 onClick={() => onRemoveGame(game.id)}
               >
                 <X className="h-4 w-4" />
               </Button>
-              <div className="flex items-center justify-between mb-2 pr-8">
+              <div className="flex items-center justify-between mb-1.5 pr-8">
                 <Badge variant="outline">Game #{gameNumber}</Badge>
                 <span className="text-xs text-gray-500">{date}</span>
               </div>
@@ -145,10 +145,10 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
         {games.length > 10 && <p className="text-center text-xs text-gray-500 mt-4">최근 10개 게임만 표시됩니다</p>}
       </TabsContent>
 
-      <TabsContent value="stats" className="space-y-6 mt-4">
+      <TabsContent value="stats" className="space-y-4 mt-3">
         {/* Player Game Counts */}
         <div>
-          <h3 className="font-medium mb-3">선수별 게임 수</h3>
+          <h3 className="text-sm md:text-base font-medium mb-2">선수별 게임 수</h3>
           {playerStatsArray.length > 0 ? (
             <div className="space-y-2">
               {playerStatsArray.map((stat, index) => (
@@ -168,7 +168,7 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
 
         {/* Pair Statistics */}
         <div>
-          <h3 className="font-medium mb-3">페어 통계</h3>
+          <h3 className="text-sm md:text-base font-medium mb-2">페어 통계</h3>
           {pairStats.length > 0 ? (
             <div className="space-y-2">
               {pairStats.map((stat, index) => (

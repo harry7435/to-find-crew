@@ -13,7 +13,7 @@ import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
 import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
 import GameHistory from '@/components/game-manager/GameHistory';
-import { smartTeamPicker, randomTeamPicker } from '@/utils/smartTeamPicker';
+import { randomTeamPicker } from '@/utils/smartTeamPicker';
 
 export default function GameManagerPage() {
   const router = useRouter();
@@ -69,22 +69,6 @@ export default function GameManagerPage() {
     [players, removePlayer, pickedTeams],
   );
 
-  const handleSmartPickTeams = useCallback(() => {
-    const activePlayers = players.filter((p) => p.status === 'active');
-    if (activePlayers.length < 4) {
-      toast.error('최소 4명의 활성 선수가 필요합니다');
-      return;
-    }
-
-    try {
-      const teams = smartTeamPicker(players, games);
-      setPickedTeams(teams);
-    } catch (error) {
-      console.error('Team picking error:', error);
-      toast.error(error instanceof Error ? error.message : '팀을 뽑는데 실패했습니다');
-    }
-  }, [players, games]);
-
   const handleRandomPickTeams = useCallback(() => {
     const activePlayers = players.filter((p) => p.status === 'active');
     if (activePlayers.length < 4) {
@@ -121,8 +105,9 @@ export default function GameManagerPage() {
   }, [pickedTeams, addGame]);
 
   const handleRejectPick = useCallback(() => {
-    setPickedTeams(null);
-  }, []);
+    // 다시 랜덤 뽑기 실행
+    handleRandomPickTeams();
+  }, [handleRandomPickTeams]);
 
   const handleCustomConfirm = useCallback((teamA: [Player, Player], teamB: [Player, Player]) => {
     setPickedTeams({ teamA, teamB });
@@ -150,6 +135,8 @@ export default function GameManagerPage() {
       updatePlayer(id, { status: newStatus });
 
       if (newStatus === 'resting') {
+        // 휴식 상태로 변경하면 필수 포함도 해제
+        updatePlayer(id, { pinned: false });
         toast.success(`${player.name} 선수가 휴식 상태로 변경되었습니다`);
         // Clear picked teams if the player was in them
         if (pickedTeams) {
@@ -160,6 +147,34 @@ export default function GameManagerPage() {
         }
       } else {
         toast.success(`${player.name} 선수가 활성 상태로 변경되었습니다`);
+      }
+    },
+    [players, updatePlayer, pickedTeams],
+  );
+
+  const handleTogglePinned = useCallback(
+    (id: string) => {
+      const player = players.find((p) => p.id === id);
+      if (!player) return;
+
+      // 휴식중인 선수는 필수 포함 불가
+      if (player.status === 'resting') {
+        toast.error('휴식중인 선수는 필수 포함할 수 없습니다');
+        return;
+      }
+
+      const newPinned = !player.pinned;
+      updatePlayer(id, { pinned: newPinned });
+
+      if (newPinned) {
+        toast.success(`${player.name} 선수가 필수 포함되었습니다`);
+      } else {
+        toast.success(`${player.name} 선수의 필수 포함이 해제되었습니다`);
+      }
+
+      // Clear picked teams when pinned status changes
+      if (pickedTeams) {
+        setPickedTeams(null);
       }
     },
     [players, updatePlayer, pickedTeams],
@@ -211,30 +226,30 @@ export default function GameManagerPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-3 py-4 max-w-4xl">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
         </Button>
-        <h1 className="text-2xl font-bold">번개 게임 관리</h1>
+        <h1 className="text-xl md:text-2xl font-bold">번개 게임 관리</h1>
         <div className="w-11" />
       </div>
 
       {/* Section 1: Player Registration */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>선수 등록</CardTitle>
+      <Card className="mb-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg">선수 등록</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <PlayerForm onAddPlayer={handleAddPlayer} />
         </CardContent>
       </Card>
 
       {/* Section 2: Player List */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>
+      <Card className="mb-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg">
             등록된 선수 ({players.length}명)
             {players.filter((p) => p.status === 'resting').length > 0 && (
               <span className="text-sm text-gray-500 ml-2">
@@ -243,21 +258,22 @@ export default function GameManagerPage() {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <PlayerList
             players={players}
             onRemovePlayer={handleRemovePlayer}
             onEditPlayer={handleEditPlayer}
             onToggleStatus={handleToggleStatus}
+            onTogglePinned={handleTogglePinned}
             gameCountsMap={playerGameCounts}
           />
         </CardContent>
       </Card>
 
       {/* Section 3: Team Picker */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className="mb-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg flex items-center justify-between">
             <span>팀 뽑기</span>
             {!pickedTeams && !isCustomPicking && (
               <Button variant="outline" size="sm" onClick={() => setIsCustomPicking(true)}>
@@ -266,7 +282,7 @@ export default function GameManagerPage() {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {isCustomPicking ? (
             <CustomTeamPicker
               players={players}
@@ -278,7 +294,6 @@ export default function GameManagerPage() {
               players={players}
               games={games}
               pickedTeams={pickedTeams}
-              onSmartPick={handleSmartPickTeams}
               onRandomPick={handleRandomPickTeams}
               onConfirm={handleConfirmGame}
               onReject={handleRejectPick}
@@ -288,22 +303,22 @@ export default function GameManagerPage() {
       </Card>
 
       {/* Section 4: Game History & Stats */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>게임 기록 ({games.length})</CardTitle>
+      <Card className="mb-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg">게임 기록 ({games.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
         </CardContent>
       </Card>
 
       {/* Section 5: Reset Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>초기화</CardTitle>
+      <Card className="mb-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg">초기화</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-3">
+        <CardContent className="pt-0">
+          <div className="flex flex-col md:flex-row gap-2">
             <Button onClick={handleResetGames} variant="outline" className="flex-1">
               게임 기록 초기화
             </Button>
@@ -311,7 +326,7 @@ export default function GameManagerPage() {
               선수 목록 초기화
             </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-3">⚠️ 초기화는 되돌릴 수 없습니다</p>
+          <p className="text-xs text-gray-500 mt-2">⚠️ 초기화는 되돌릴 수 없습니다</p>
         </CardContent>
       </Card>
 

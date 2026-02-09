@@ -5,7 +5,7 @@ import { Player } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X } from 'lucide-react';
+import { X, Star } from 'lucide-react';
 
 interface CustomTeamPickerProps {
   players: Player[];
@@ -75,105 +75,132 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
   const canConfirm = teamA.length === 2 && teamB.length === 2;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Team A */}
         <Card className="bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-lg text-blue-800">Team A ({teamA.length}/2)</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base md:text-lg text-blue-800">Team A ({teamA.length}/2)</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 pt-0">
             {teamA.length === 0 && <p className="text-sm text-gray-500 text-center py-4">선수를 선택해주세요</p>}
-            {teamA.map((player) => (
-              <div key={player.id} className="flex items-center justify-between p-2 bg-white rounded">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{getGenderIcon(player.gender)}</span>
-                  <span className="font-medium">{player.name}</span>
-                  {player.skillLevel && (
-                    <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                  )}
+            {teamA.map((player) => {
+              const isPinned = player.pinned === true;
+              return (
+                <div key={player.id} className="flex items-center justify-between p-2 bg-white rounded">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{getGenderIcon(player.gender)}</span>
+                    <span className="font-medium">{player.name}</span>
+                    {isPinned && (
+                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                        <Star className="h-3 w-3 mr-1 fill-yellow-400" />
+                        필수
+                      </Badge>
+                    )}
+                    {player.skillLevel && (
+                      <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleRemoveFromTeamA(player.id)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleRemoveFromTeamA(player.id)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
         {/* Team B */}
         <Card className="bg-red-50 border-red-200">
-          <CardHeader>
-            <CardTitle className="text-lg text-red-800">Team B ({teamB.length}/2)</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base md:text-lg text-red-800">Team B ({teamB.length}/2)</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 pt-0">
             {teamB.length === 0 && <p className="text-sm text-gray-500 text-center py-4">선수를 선택해주세요</p>}
-            {teamB.map((player) => (
-              <div key={player.id} className="flex items-center justify-between p-2 bg-white rounded">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{getGenderIcon(player.gender)}</span>
-                  <span className="font-medium">{player.name}</span>
-                  {player.skillLevel && (
-                    <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                  )}
+            {teamB.map((player) => {
+              const isPinned = player.pinned === true;
+              return (
+                <div key={player.id} className="flex items-center justify-between p-2 bg-white rounded">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{getGenderIcon(player.gender)}</span>
+                    <span className="font-medium">{player.name}</span>
+                    {isPinned && (
+                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                        <Star className="h-3 w-3 mr-1 fill-yellow-400" />
+                        필수
+                      </Badge>
+                    )}
+                    {player.skillLevel && (
+                      <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleRemoveFromTeamB(player.id)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleRemoveFromTeamB(player.id)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </div>
 
       {/* Available Players */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">활성 선수 선택</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base md:text-lg">활성 선수 선택</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {availablePlayers.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">모든 선수가 팀에 배정되었습니다</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {availablePlayers.map((player) => (
-                <div key={player.id} className="flex items-center justify-between p-2 border rounded">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{getGenderIcon(player.gender)}</span>
-                    <span className="font-medium">{player.name}</span>
-                    {player.skillLevel && (
-                      <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                    )}
+              {availablePlayers.map((player) => {
+                const isPinned = player.pinned === true;
+                return (
+                  <div key={player.id} className="flex items-center justify-between p-2 border rounded">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{getGenderIcon(player.gender)}</span>
+                      <span className="font-medium">{player.name}</span>
+                      {isPinned && (
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                          <Star className="h-3 w-3 mr-1 fill-yellow-400" />
+                          필수
+                        </Badge>
+                      )}
+                      {player.skillLevel && (
+                        <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddToTeamA(player)}
+                        disabled={teamA.length >= 2}
+                        className="text-xs"
+                      >
+                        Team A
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddToTeamB(player)}
+                        disabled={teamB.length >= 2}
+                        className="text-xs"
+                      >
+                        Team B
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddToTeamA(player)}
-                      disabled={teamA.length >= 2}
-                      className="text-xs"
-                    >
-                      Team A
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddToTeamB(player)}
-                      disabled={teamB.length >= 2}
-                      className="text-xs"
-                    >
-                      Team B
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 justify-center">
+      <div className="flex gap-2 justify-center">
         <Button onClick={handleConfirm} size="lg" disabled={!canConfirm} className="flex-1 md:flex-none">
           확정
         </Button>

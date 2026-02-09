@@ -170,14 +170,29 @@ export function smartTeamPicker(
 // 단순 랜덤 매칭 (폴백용)
 export function randomTeamPicker(players: Player[]): { teamA: [Player, Player]; teamB: [Player, Player] } {
   const activePlayers = players.filter((p) => p.status === 'active');
+  const pinnedPlayers = activePlayers.filter((p) => p.pinned === true);
+  const unpinnedPlayers = activePlayers.filter((p) => !p.pinned);
 
+  // 필수 포함 선수가 4명을 초과하면 에러
+  if (pinnedPlayers.length > 4) {
+    throw new Error('필수 포함 선수는 최대 4명까지 가능합니다');
+  }
+
+  // 전체 활성 선수가 4명 미만이면 에러
   if (activePlayers.length < 4) {
     throw new Error('최소 4명의 활성 선수가 필요합니다');
   }
 
-  const shuffled = shuffleArray(activePlayers);
+  // 필수 포함 선수를 먼저 배치하고, 부족한 인원은 일반 선수에서 랜덤 선택
+  const neededCount = 4 - pinnedPlayers.length;
+  const shuffledUnpinned = shuffleArray(unpinnedPlayers);
+  const selectedPlayers = [...pinnedPlayers, ...shuffledUnpinned.slice(0, neededCount)];
+
+  // 최종 4명을 다시 셔플 (필수 포함 선수도 랜덤하게 팀에 분배)
+  const finalShuffle = shuffleArray(selectedPlayers);
+
   return {
-    teamA: [shuffled[0], shuffled[1]],
-    teamB: [shuffled[2], shuffled[3]],
+    teamA: [finalShuffle[0], finalShuffle[1]],
+    teamB: [finalShuffle[2], finalShuffle[3]],
   };
 }

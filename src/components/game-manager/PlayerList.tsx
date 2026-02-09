@@ -3,13 +3,14 @@
 import { Player } from '@/hooks/useGameManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Trophy, Edit, Coffee, Play } from 'lucide-react';
+import { X, Trophy, Edit, Coffee, Play, Star } from 'lucide-react';
 
 interface PlayerListProps {
   players: Player[];
   onRemovePlayer: (id: string) => void;
   onEditPlayer: (player: Player) => void;
   onToggleStatus: (id: string) => void;
+  onTogglePinned: (id: string) => void;
   gameCountsMap?: Map<string, number>;
 }
 
@@ -47,6 +48,7 @@ export default function PlayerList({
   onRemovePlayer,
   onEditPlayer,
   onToggleStatus,
+  onTogglePinned,
   gameCountsMap,
 }: PlayerListProps) {
   if (players.length === 0) {
@@ -59,19 +61,20 @@ export default function PlayerList({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {players.map((player) => {
         const gameCount = gameCountsMap?.get(player.id) || 0;
         const ageLabel = getAgeGroupLabel(player.ageGroup);
         const isResting = player.status === 'resting';
+        const isPinned = player.pinned === true;
         return (
           <div
             key={player.id}
-            className={`flex items-center justify-between p-3 border rounded-lg hover:shadow-md transition-shadow ${
-              isResting ? 'bg-gray-50 opacity-70' : ''
+            className={`flex items-center justify-between p-2 border rounded-lg hover:shadow-md transition-shadow ${
+              isResting ? 'bg-gray-50 opacity-70' : isPinned ? 'bg-yellow-50 border-yellow-300' : ''
             }`}
           >
-            <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-2 flex-1">
               <span className="text-xl">{getGenderIcon(player.gender)}</span>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -86,6 +89,12 @@ export default function PlayerList({
                       휴식중
                     </Badge>
                   )}
+                  {isPinned && (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                      <Star className="h-3 w-3 mr-1" />
+                      필수 포함
+                    </Badge>
+                  )}
                 </div>
                 {gameCount > 0 && (
                   <div className="flex items-center gap-1 text-xs text-gray-600 mt-1">
@@ -96,6 +105,15 @@ export default function PlayerList({
               </div>
             </div>
             <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onTogglePinned(player.id)}
+                title={isPinned ? '필수 포함 해제' : '필수 포함 설정'}
+                disabled={isResting}
+              >
+                <Star className={`h-4 w-4 ${isPinned ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

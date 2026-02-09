@@ -65,9 +65,9 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-2">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="space-y-1.5">
           <Label htmlFor="player-name">이름 *</Label>
           <Input
             id="player-name"
@@ -79,7 +79,7 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
           {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <Label htmlFor="player-gender">성별</Label>
           <select
             id="player-gender"
@@ -94,7 +94,7 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
           {errors.gender && <p className="text-sm text-red-600">{errors.gender.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <Label htmlFor="player-age">나이대</Label>
           <select
             id="player-age"
@@ -113,7 +113,7 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
           {errors.ageGroup && <p className="text-sm text-red-600">{errors.ageGroup.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <Label htmlFor="player-skill">실력 급수</Label>
           <select
             id="player-skill"

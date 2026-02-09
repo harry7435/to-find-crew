@@ -8,6 +8,7 @@ export interface Player {
   skillLevel?: 'S' | 'A' | 'B' | 'C' | 'D' | 'E';
   ageGroup?: '10s' | '20s' | '30s' | '40s' | '50s' | '60s+';
   status: 'active' | 'resting'; // active: 게임 가능, resting: 휴식중
+  pinned?: boolean; // true: 무조건 포함, false/undefined: 일반
 }
 
 export interface GameRecord {
