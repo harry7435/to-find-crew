@@ -121,8 +121,8 @@ export default function GameManagerPage() {
   }, [pickedTeams, addGame]);
 
   const handleRejectPick = useCallback(() => {
-    handleSmartPickTeams();
-  }, [handleSmartPickTeams]);
+    setPickedTeams(null);
+  }, []);
 
   const handleCustomConfirm = useCallback((teamA: [Player, Player], teamB: [Player, Player]) => {
     setPickedTeams({ teamA, teamB });
@@ -216,10 +216,9 @@ export default function GameManagerPage() {
       <div className="mb-6 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          뒤로가기
         </Button>
-        <h1 className="text-2xl font-bold">게임 선수 관리</h1>
-        <div className="w-20" />
+        <h1 className="text-2xl font-bold">번개 게임 관리</h1>
+        <div className="w-11" />
       </div>
 
       {/* Section 1: Player Registration */}
