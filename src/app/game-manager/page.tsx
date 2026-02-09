@@ -11,8 +11,9 @@ import PlayerForm from '@/components/game-manager/PlayerForm';
 import PlayerList from '@/components/game-manager/PlayerList';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
+import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
 import GameHistory from '@/components/game-manager/GameHistory';
-import { smartTeamPicker } from '@/utils/smartTeamPicker';
+import { smartTeamPicker, randomTeamPicker } from '@/utils/smartTeamPicker';
 
 export default function GameManagerPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function GameManagerPage() {
   } = useGameManager();
   const [pickedTeams, setPickedTeams] = useState<{ teamA: [Player, Player]; teamB: [Player, Player] } | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [isCustomPicking, setIsCustomPicking] = useState(false);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -67,7 +69,7 @@ export default function GameManagerPage() {
     [players, removePlayer, pickedTeams],
   );
 
-  const handlePickTeams = useCallback(() => {
+  const handleSmartPickTeams = useCallback(() => {
     const activePlayers = players.filter((p) => p.status === 'active');
     if (activePlayers.length < 4) {
       toast.error('최소 4명의 활성 선수가 필요합니다');
@@ -83,6 +85,22 @@ export default function GameManagerPage() {
     }
   }, [players, games]);
 
+  const handleRandomPickTeams = useCallback(() => {
+    const activePlayers = players.filter((p) => p.status === 'active');
+    if (activePlayers.length < 4) {
+      toast.error('최소 4명의 활성 선수가 필요합니다');
+      return;
+    }
+
+    try {
+      const teams = randomTeamPicker(players);
+      setPickedTeams(teams);
+    } catch (error) {
+      console.error('Team picking error:', error);
+      toast.error(error instanceof Error ? error.message : '팀을 뽑는데 실패했습니다');
+    }
+  }, [players]);
+
   const handleConfirmGame = useCallback(() => {
     if (!pickedTeams) return;
 
@@ -91,13 +109,25 @@ export default function GameManagerPage() {
       teamB: [pickedTeams.teamB[0].id, pickedTeams.teamB[1].id],
     });
 
-    toast.success('게임이 확정되었습니다!');
+    const teamANames = `${pickedTeams.teamA[0].name} & ${pickedTeams.teamA[1].name}`;
+    const teamBNames = `${pickedTeams.teamB[0].name} & ${pickedTeams.teamB[1].name}`;
+
+    toast.success('게임이 확정되었습니다!', {
+      description: `Team A: ${teamANames} vs Team B: ${teamBNames}`,
+      duration: 5000,
+    });
     setPickedTeams(null);
+    setIsCustomPicking(false);
   }, [pickedTeams, addGame]);
 
   const handleRejectPick = useCallback(() => {
-    handlePickTeams();
-  }, [handlePickTeams]);
+    handleSmartPickTeams();
+  }, [handleSmartPickTeams]);
+
+  const handleCustomConfirm = useCallback((teamA: [Player, Player], teamB: [Player, Player]) => {
+    setPickedTeams({ teamA, teamB });
+    setIsCustomPicking(false);
+  }, []);
 
   const handleEditPlayer = useCallback((player: Player) => {
     setEditingPlayer(player);
@@ -228,17 +258,33 @@ export default function GameManagerPage() {
       {/* Section 3: Team Picker */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>팀 뽑기</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>팀 뽑기</span>
+            {!pickedTeams && !isCustomPicking && (
+              <Button variant="outline" size="sm" onClick={() => setIsCustomPicking(true)}>
+                직접 선택
+              </Button>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <TeamPicker
-            players={players}
-            games={games}
-            pickedTeams={pickedTeams}
-            onPick={handlePickTeams}
-            onConfirm={handleConfirmGame}
-            onReject={handleRejectPick}
-          />
+          {isCustomPicking ? (
+            <CustomTeamPicker
+              players={players}
+              onConfirm={handleCustomConfirm}
+              onCancel={() => setIsCustomPicking(false)}
+            />
+          ) : (
+            <TeamPicker
+              players={players}
+              games={games}
+              pickedTeams={pickedTeams}
+              onSmartPick={handleSmartPickTeams}
+              onRandomPick={handleRandomPickTeams}
+              onConfirm={handleConfirmGame}
+              onReject={handleRejectPick}
+            />
+          )}
         </CardContent>
       </Card>
 

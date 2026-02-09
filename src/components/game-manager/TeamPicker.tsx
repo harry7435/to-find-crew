@@ -12,7 +12,8 @@ interface TeamPickerProps {
   players: Player[];
   games: GameRecord[];
   pickedTeams: { teamA: [Player, Player]; teamB: [Player, Player] } | null;
-  onPick: () => void;
+  onSmartPick: () => void;
+  onRandomPick: () => void;
   onConfirm: () => void;
   onReject: () => void;
 }
@@ -46,7 +47,15 @@ function getAgeGroupLabel(ageGroup?: string): string | null {
   return ageGroup === '60s+' ? '60대+' : ageGroup.replace('s', '대');
 }
 
-export default function TeamPicker({ players, games, pickedTeams, onPick, onConfirm, onReject }: TeamPickerProps) {
+export default function TeamPicker({
+  players,
+  games,
+  pickedTeams,
+  onSmartPick,
+  onRandomPick,
+  onConfirm,
+  onReject,
+}: TeamPickerProps) {
   const activePlayers = players.filter((p) => p.status === 'active');
   const canPick = activePlayers.length >= 4;
 
@@ -83,14 +92,26 @@ export default function TeamPicker({ players, games, pickedTeams, onPick, onConf
   if (!pickedTeams) {
     return (
       <div className="text-center space-y-4">
-        <Button onClick={onPick} disabled={!canPick} size="lg" className="w-full md:w-auto">
-          스마트 매칭 🎲
-        </Button>
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Button onClick={onSmartPick} disabled={!canPick} size="lg" className="flex-1 md:flex-none min-w-[140px]">
+            스마트 매칭 🎯
+          </Button>
+          <Button
+            onClick={onRandomPick}
+            disabled={!canPick}
+            size="lg"
+            variant="outline"
+            className="flex-1 md:flex-none min-w-[140px]"
+          >
+            랜덤 뽑기 🎲
+          </Button>
+        </div>
         {!canPick && (
           <p className="text-sm text-gray-500">최소 4명의 활성 선수가 필요합니다 (현재: {activePlayers.length}명)</p>
         )}
         {canPick && (
           <div className="text-xs text-gray-500 space-y-1 max-w-md mx-auto">
+            <p className="font-medium">스마트 매칭:</p>
             <p>💡 게임 수가 적은 선수 우선 배정</p>
             <p>💡 같은 페어 중복 최소화</p>
             <p>💡 밸런스 있는 매칭</p>
