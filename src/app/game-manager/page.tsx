@@ -214,6 +214,31 @@ export default function GameManagerPage() {
     }
   }, [players.length, resetPlayers, resetGames]);
 
+  const handleResetPlayerStates = useCallback(() => {
+    if (players.length === 0) {
+      toast.error('선수가 없습니다');
+      return;
+    }
+
+    const hasRestingPlayers = players.some((p) => p.status === 'resting');
+    const hasPinnedPlayers = players.some((p) => p.pinned === true);
+
+    if (!hasRestingPlayers && !hasPinnedPlayers) {
+      toast.error('휴식중이거나 필수 포함된 선수가 없습니다');
+      return;
+    }
+
+    if (confirm('모든 선수의 휴식 상태와 필수 포함을 해제하시겠습니까?')) {
+      players.forEach((player) => {
+        if (player.status === 'resting' || player.pinned === true) {
+          updatePlayer(player.id, { status: 'active', pinned: false });
+        }
+      });
+      setPickedTeams(null);
+      toast.success('선수 상태가 초기화되었습니다');
+    }
+  }, [players, updatePlayer]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -318,7 +343,10 @@ export default function GameManagerPage() {
           <CardTitle className="text-base md:text-lg">초기화</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="flex flex-col md:flex-row gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Button onClick={handleResetPlayerStates} variant="secondary" className="flex-1">
+              선수 상태 초기화
+            </Button>
             <Button onClick={handleResetGames} variant="outline" className="flex-1">
               게임 기록 초기화
             </Button>
@@ -326,7 +354,9 @@ export default function GameManagerPage() {
               선수 목록 초기화
             </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">⚠️ 초기화는 되돌릴 수 없습니다</p>
+          <p className="text-xs text-gray-500 mt-2">
+            ⚠️ 선수 상태 초기화: 모든 휴식·필수포함 해제 | 게임/선수 초기화: 되돌릴 수 없음
+          </p>
         </CardContent>
       </Card>
 
