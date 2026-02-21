@@ -60,9 +60,11 @@ export default function PlayerList({
     );
   }
 
+  const sortedPlayers = [...players].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-      {players.map((player) => {
+      {sortedPlayers.map((player) => {
         const gameCount = gameCountsMap?.get(player.id) || 0;
         const ageLabel = getAgeGroupLabel(player.ageGroup);
         const isResting = player.status === 'resting';
