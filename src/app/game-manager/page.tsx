@@ -29,14 +29,14 @@ export default function GameManagerPage() {
     resetGames,
     isLoading,
   } = useGameManager();
-  const [pickedTeams, setPickedTeams] = useState<{ teamA: [Player, Player]; teamB: [Player, Player] } | null>(null);
+  const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
     games.forEach((game) => {
-      [game.teamA[0], game.teamA[1], game.teamB[0], game.teamB[1]].forEach((playerId) => {
+      game.players.forEach((playerId) => {
         counts.set(playerId, (counts.get(playerId) || 0) + 1);
       });
     });
@@ -57,16 +57,16 @@ export default function GameManagerPage() {
       if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
         removePlayer(id);
         toast.success('선수가 삭제되었습니다');
-        // Clear picked teams if the removed player was in them
-        if (pickedTeams) {
-          const allPickedIds = [...pickedTeams.teamA.map((p) => p.id), ...pickedTeams.teamB.map((p) => p.id)];
+        // Clear picked players if the removed player was in them
+        if (pickedPlayers) {
+          const allPickedIds = pickedPlayers.map((p) => p.id);
           if (allPickedIds.includes(id)) {
-            setPickedTeams(null);
+            setPickedPlayers(null);
           }
         }
       }
     },
-    [players, removePlayer, pickedTeams],
+    [players, removePlayer, pickedPlayers],
   );
 
   const handleRandomPickTeams = useCallback(() => {
@@ -77,40 +77,38 @@ export default function GameManagerPage() {
     }
 
     try {
-      const teams = randomTeamPicker(players);
-      setPickedTeams(teams);
+      const selectedPlayers = randomTeamPicker(players);
+      setPickedPlayers(selectedPlayers);
     } catch (error) {
-      console.error('Team picking error:', error);
-      toast.error(error instanceof Error ? error.message : '팀을 뽑는데 실패했습니다');
+      console.error('Player picking error:', error);
+      toast.error(error instanceof Error ? error.message : '선수를 뽑는데 실패했습니다');
     }
   }, [players]);
 
   const handleConfirmGame = useCallback(() => {
-    if (!pickedTeams) return;
+    if (!pickedPlayers) return;
 
     addGame({
-      teamA: [pickedTeams.teamA[0].id, pickedTeams.teamA[1].id],
-      teamB: [pickedTeams.teamB[0].id, pickedTeams.teamB[1].id],
+      players: pickedPlayers.map((p) => p.id) as [string, string, string, string],
     });
 
-    const teamANames = `${pickedTeams.teamA[0].name} & ${pickedTeams.teamA[1].name}`;
-    const teamBNames = `${pickedTeams.teamB[0].name} & ${pickedTeams.teamB[1].name}`;
+    const playerNames = pickedPlayers.map((p) => p.name).join(', ');
 
     toast.success('게임이 확정되었습니다!', {
-      description: `Team A: ${teamANames} vs Team B: ${teamBNames}`,
+      description: `선수: ${playerNames}`,
       duration: 5000,
     });
-    setPickedTeams(null);
+    setPickedPlayers(null);
     setIsCustomPicking(false);
-  }, [pickedTeams, addGame]);
+  }, [pickedPlayers, addGame]);
 
   const handleRejectPick = useCallback(() => {
     // 다시 랜덤 뽑기 실행
     handleRandomPickTeams();
   }, [handleRandomPickTeams]);
 
-  const handleCustomConfirm = useCallback((teamA: [Player, Player], teamB: [Player, Player]) => {
-    setPickedTeams({ teamA, teamB });
+  const handleCustomConfirm = useCallback((players: [Player, Player, Player, Player]) => {
+    setPickedPlayers(players);
     setIsCustomPicking(false);
   }, []);
 
@@ -138,18 +136,18 @@ export default function GameManagerPage() {
         // 휴식 상태로 변경하면 필수 포함도 해제
         updatePlayer(id, { pinned: false });
         toast.success(`${player.name} 선수가 휴식 상태로 변경되었습니다`);
-        // Clear picked teams if the player was in them
-        if (pickedTeams) {
-          const allPickedIds = [...pickedTeams.teamA.map((p) => p.id), ...pickedTeams.teamB.map((p) => p.id)];
+        // Clear picked players if the player was in them
+        if (pickedPlayers) {
+          const allPickedIds = pickedPlayers.map((p) => p.id);
           if (allPickedIds.includes(id)) {
-            setPickedTeams(null);
+            setPickedPlayers(null);
           }
         }
       } else {
         toast.success(`${player.name} 선수가 활성 상태로 변경되었습니다`);
       }
     },
-    [players, updatePlayer, pickedTeams],
+    [players, updatePlayer, pickedPlayers],
   );
 
   const handleTogglePinned = useCallback(
@@ -172,12 +170,12 @@ export default function GameManagerPage() {
         toast.success(`${player.name} 선수의 필수 포함이 해제되었습니다`);
       }
 
-      // Clear picked teams when pinned status changes
-      if (pickedTeams) {
-        setPickedTeams(null);
+      // Clear picked players when pinned status changes
+      if (pickedPlayers) {
+        setPickedPlayers(null);
       }
     },
-    [players, updatePlayer, pickedTeams],
+    [players, updatePlayer, pickedPlayers],
   );
 
   const handleRemoveGame = useCallback(
@@ -209,7 +207,7 @@ export default function GameManagerPage() {
     if (confirm('모든 선수 정보를 삭제하시겠습니까?\n(게임 기록도 함께 삭제됩니다)')) {
       resetPlayers();
       resetGames();
-      setPickedTeams(null);
+      setPickedPlayers(null);
       toast.success('선수 목록이 초기화되었습니다');
     }
   }, [players.length, resetPlayers, resetGames]);
@@ -234,7 +232,7 @@ export default function GameManagerPage() {
           updatePlayer(player.id, { status: 'active', pinned: false });
         }
       });
-      setPickedTeams(null);
+      setPickedPlayers(null);
       toast.success('선수 상태가 초기화되었습니다');
     }
   }, [players, updatePlayer]);
@@ -300,7 +298,7 @@ export default function GameManagerPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base md:text-lg flex items-center justify-between">
             <span>팀 뽑기</span>
-            {!pickedTeams && !isCustomPicking && (
+            {!pickedPlayers && !isCustomPicking && (
               <Button variant="outline" size="sm" onClick={() => setIsCustomPicking(true)}>
                 직접 선택
               </Button>
@@ -318,7 +316,7 @@ export default function GameManagerPage() {
             <TeamPicker
               players={players}
               games={games}
-              pickedTeams={pickedTeams}
+              pickedPlayers={pickedPlayers}
               onRandomPick={handleRandomPickTeams}
               onConfirm={handleConfirmGame}
               onReject={handleRejectPick}

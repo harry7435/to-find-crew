@@ -13,57 +13,16 @@ interface GameHistoryProps {
   onRemoveGame: (id: string) => void;
 }
 
-interface PairStats {
-  player1Id: string;
-  player2Id: string;
-  player1Name: string;
-  player2Name: string;
-  playCount: number;
-}
-
 export default function GameHistory({ games, players, onRemoveGame }: GameHistoryProps) {
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
     games.forEach((game) => {
-      [game.teamA[0], game.teamA[1], game.teamB[0], game.teamB[1]].forEach((playerId) => {
+      game.players.forEach((playerId) => {
         counts.set(playerId, (counts.get(playerId) || 0) + 1);
       });
     });
     return counts;
   }, [games]);
-
-  const pairStats = useMemo(() => {
-    const pairMap = new Map<string, number>();
-
-    games.forEach((game) => {
-      // Team A pairs
-      const teamAPair = [game.teamA[0], game.teamA[1]].sort().join('-');
-      pairMap.set(teamAPair, (pairMap.get(teamAPair) || 0) + 1);
-
-      // Team B pairs
-      const teamBPair = [game.teamB[0], game.teamB[1]].sort().join('-');
-      pairMap.set(teamBPair, (pairMap.get(teamBPair) || 0) + 1);
-    });
-
-    const stats: PairStats[] = [];
-    pairMap.forEach((count, pairKey) => {
-      const [id1, id2] = pairKey.split('-');
-      const p1 = players.find((p) => p.id === id1);
-      const p2 = players.find((p) => p.id === id2);
-
-      if (p1 && p2) {
-        stats.push({
-          player1Id: id1,
-          player2Id: id2,
-          player1Name: p1.name,
-          player2Name: p2.name,
-          playCount: count,
-        });
-      }
-    });
-
-    return stats.sort((a, b) => b.playCount - a.playCount);
-  }, [games, players]);
 
   const playerStatsArray = useMemo(() => {
     return players
@@ -75,6 +34,18 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
       .filter((stat) => stat.count > 0)
       .sort((a, b) => b.count - a.count);
   }, [players, playerGameCounts]);
+
+  const maxGames = useMemo(() => {
+    return Math.max(...playerStatsArray.map((s) => s.count), 1);
+  }, [playerStatsArray]);
+
+  // 게임 횟수에 따른 색상 결정
+  function getGameCountColor(count: number, max: number): string {
+    const ratio = count / max;
+    if (ratio <= 0.33) return 'bg-green-500'; // 게임 적음
+    if (ratio <= 0.66) return 'bg-yellow-500'; // 평균
+    return 'bg-orange-500'; // 게임 많음
+  }
 
   if (games.length === 0) {
     return (
@@ -120,24 +91,16 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
               >
                 <X className="h-4 w-4" />
               </Button>
-              <div className="flex items-center justify-between mb-1.5 pr-8">
+              <div className="flex items-center justify-between mb-2 pr-8">
                 <Badge variant="outline">Game #{gameNumber}</Badge>
                 <span className="text-xs text-gray-500">{date}</span>
               </div>
-              <div className="flex items-center justify-center gap-4">
-                <div className="text-center">
-                  <div className="text-xs text-blue-600 font-medium mb-1">Team A</div>
-                  <div className="text-sm">
-                    {getPlayerName(game.teamA[0])} & {getPlayerName(game.teamA[1])}
+              <div className="grid grid-cols-2 gap-2">
+                {game.players.map((playerId) => (
+                  <div key={playerId} className="text-sm p-1.5 bg-gray-50 rounded">
+                    {getPlayerName(playerId)}
                   </div>
-                </div>
-                <span className="text-gray-400 font-bold">VS</span>
-                <div className="text-center">
-                  <div className="text-xs text-red-600 font-medium mb-1">Team B</div>
-                  <div className="text-sm">
-                    {getPlayerName(game.teamB[0])} & {getPlayerName(game.teamB[1])}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           );
@@ -146,48 +109,57 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
       </TabsContent>
 
       <TabsContent value="stats" className="space-y-4 mt-3">
-        {/* Player Game Counts */}
+        {/* Player Game Counts with Visualization */}
         <div>
-          <h3 className="text-sm md:text-base font-medium mb-2">선수별 게임 수</h3>
+          <h3 className="text-sm md:text-base font-medium mb-3">선수별 게임 수</h3>
           {playerStatsArray.length > 0 ? (
-            <div className="space-y-2">
-              {playerStatsArray.map((stat, index) => (
-                <div key={stat.id} className="flex items-center justify-between p-2 border rounded">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
-                    <span className="font-medium">{stat.name}</span>
+            <div className="space-y-3">
+              {playerStatsArray.map((stat, index) => {
+                const percentage = (stat.count / maxGames) * 100;
+                const colorClass = getGameCountColor(stat.count, maxGames);
+
+                return (
+                  <div key={stat.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
+                        <span className="font-medium">{stat.name}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {stat.count}게임
+                      </Badge>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-1/2 h-2 bg-gray-200 rounded-full overflow-hidden ml-8">
+                      <div
+                        className={`h-full ${colorClass} transition-all duration-300`}
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
                   </div>
-                  <Badge variant="outline">{stat.count}게임</Badge>
+                );
+              })}
+              {/* 범례 */}
+              <div className="mt-4 pt-3 border-t">
+                <p className="text-xs text-gray-600 mb-2">색상 의미:</p>
+                <div className="flex gap-4 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-green-500 rounded"></div>
+                    <span className="text-gray-600">게임 적음 (우선 선발)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                    <span className="text-gray-600">평균 참여</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                    <span className="text-gray-600">게임 많음</span>
+                  </div>
                 </div>
-              ))}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-gray-500 text-center py-4">게임 기록이 없습니다</p>
-          )}
-        </div>
-
-        {/* Pair Statistics */}
-        <div>
-          <h3 className="text-sm md:text-base font-medium mb-2">페어 통계</h3>
-          {pairStats.length > 0 ? (
-            <div className="space-y-2">
-              {pairStats.map((stat, index) => (
-                <div
-                  key={`${stat.player1Id}-${stat.player2Id}`}
-                  className="flex items-center justify-between p-2 border rounded"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
-                    <span className="text-sm">
-                      {stat.player1Name} & {stat.player2Name}
-                    </span>
-                  </div>
-                  <Badge variant="outline">{stat.playCount}회</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 text-center py-4">페어 기록이 없습니다</p>
           )}
         </div>
       </TabsContent>

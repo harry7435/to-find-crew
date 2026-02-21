@@ -167,8 +167,8 @@ export function smartTeamPicker(
   };
 }
 
-// 단순 랜덤 매칭 (폴백용)
-export function randomTeamPicker(players: Player[]): { teamA: [Player, Player]; teamB: [Player, Player] } {
+// 단순 랜덤 매칭 (4명 뽑기)
+export function randomTeamPicker(players: Player[]): [Player, Player, Player, Player] {
   const activePlayers = players.filter((p) => p.status === 'active');
   const pinnedPlayers = activePlayers.filter((p) => p.pinned === true);
   const unpinnedPlayers = activePlayers.filter((p) => !p.pinned);
@@ -188,11 +188,8 @@ export function randomTeamPicker(players: Player[]): { teamA: [Player, Player]; 
   const shuffledUnpinned = shuffleArray(unpinnedPlayers);
   const selectedPlayers = [...pinnedPlayers, ...shuffledUnpinned.slice(0, neededCount)];
 
-  // 최종 4명을 다시 셔플 (필수 포함 선수도 랜덤하게 팀에 분배)
+  // 최종 4명을 다시 셔플
   const finalShuffle = shuffleArray(selectedPlayers);
 
-  return {
-    teamA: [finalShuffle[0], finalShuffle[1]],
-    teamB: [finalShuffle[2], finalShuffle[3]],
-  };
+  return [finalShuffle[0], finalShuffle[1], finalShuffle[2], finalShuffle[3]] as [Player, Player, Player, Player];
 }

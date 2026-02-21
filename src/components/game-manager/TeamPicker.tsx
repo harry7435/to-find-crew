@@ -4,19 +4,54 @@ import { useMemo } from 'react';
 import { Player, GameRecord } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Users, Star } from 'lucide-react';
+import { Trophy, Star } from 'lucide-react';
 
+// ─── 고정 레이아웃 상수 ───────────────────────────────────────────
+const CARD_W = 112; // 카드 너비 (px)
+const CARD_H = 84; // 카드 높이 (px)
+const H_GAP = 60; // 카드 가로 간격
+const V_GAP = 48; // 카드 세로 간격
+
+const SVG_W = CARD_W * 2 + H_GAP; // 284
+const SVG_H = CARD_H * 2 + V_GAP; // 216
+
+// 카드 중심 좌표
+const CX0 = CARD_W / 2; // 56  (좌)
+const CX1 = CARD_W + H_GAP + CARD_W / 2; // 228 (우)
+const CY0 = CARD_H / 2; // 42  (상)
+const CY1 = CARD_H + V_GAP + CARD_H / 2; // 174 (하)
+
+// ─── 각 엣지의 선 좌표 (카드 경계 ↔ 카드 경계) ──────────────────
+const EDGE_TOP = { x1: CARD_W, y1: CY0, x2: CARD_W + H_GAP, y2: CY0 }; // P0-P1 가로
+const EDGE_BOTTOM = { x1: CARD_W, y1: CY1, x2: CARD_W + H_GAP, y2: CY1 }; // P2-P3 가로
+const EDGE_LEFT = { x1: CX0, y1: CARD_H, x2: CX0, y2: CARD_H + V_GAP }; // P0-P2 세로
+const EDGE_RIGHT = { x1: CX1, y1: CARD_H, x2: CX1, y2: CARD_H + V_GAP }; // P1-P3 세로
+// 대각선: 카드 모서리에서 12px 내부에서 시작해 카드 뒤에 선이 묻히는 것 방지
+const DIAG_INSET = 14;
+const EDGE_DIAG_A = { x1: CX0 + DIAG_INSET, y1: CY0 + DIAG_INSET, x2: CX1 - DIAG_INSET, y2: CY1 - DIAG_INSET }; // P0-P3
+const EDGE_DIAG_B = { x1: CX1 - DIAG_INSET, y1: CY0 + DIAG_INSET, x2: CX0 + DIAG_INSET, y2: CY1 - DIAG_INSET }; // P1-P2
+
+// ─── 라벨 위치 ────────────────────────────────────────────────────
+const LBL_TOP = { x: SVG_W / 2, y: CY0 - 14 }; // 선(y=42)과 겹치지 않게 위로
+const LBL_BOTTOM = { x: SVG_W / 2, y: CY1 + 16 };
+const LBL_LEFT = { x: CX0 - 20, y: (CARD_H + CARD_H + V_GAP) / 2 };
+const LBL_RIGHT = { x: CX1 + 20, y: (CARD_H + CARD_H + V_GAP) / 2 };
+// 대각선 라벨: 각 대각선의 시작 카드(P0, P1) 바로 아래 – 어느 카드에서 시작하는 선인지 명확하게
+const LBL_DIAG_A = { x: CARD_W - 8, y: CARD_H + 12 }; // P0 우하단 → (104, 96)
+const LBL_DIAG_B = { x: CARD_W + H_GAP + 8, y: CARD_H + 12 }; // P1 좌하단 → (180, 96)
+
+// ─── 타입 정의 ───────────────────────────────────────────────────
 interface TeamPickerProps {
   players: Player[];
   games: GameRecord[];
-  pickedTeams: { teamA: [Player, Player]; teamB: [Player, Player] } | null;
+  pickedPlayers: [Player, Player, Player, Player] | null;
   onRandomPick: () => void;
   onConfirm: () => void;
   onReject: () => void;
 }
 
+// ─── 유틸 ─────────────────────────────────────────────────────────
 function getSkillLevelColor(level: string): string {
   switch (level) {
     case 'S':
@@ -29,8 +64,6 @@ function getSkillLevelColor(level: string): string {
       return 'bg-blue-100 text-blue-800';
     case 'D':
       return 'bg-green-100 text-green-800';
-    case 'E':
-      return 'bg-gray-100 text-gray-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -41,15 +74,77 @@ function getGenderIcon(gender?: 'male' | 'female'): string {
   return gender === 'male' ? '♂️' : '♀️';
 }
 
-function getAgeGroupLabel(ageGroup?: string): string | null {
-  if (!ageGroup) return null;
-  return ageGroup === '60s+' ? '60대+' : ageGroup.replace('s', '대');
+// ─── 선수 카드 (고정 크기) ────────────────────────────────────────
+function PlayerCard({ player, gameCount }: { player: Player; gameCount: number }) {
+  return (
+    <div
+      className="relative z-10 border rounded-lg bg-white flex flex-col items-center justify-center gap-0.5 p-2 text-center overflow-hidden"
+      style={{ width: CARD_W, height: CARD_H }}
+    >
+      <div className="text-sm leading-none">
+        {getGenderIcon(player.gender)} <span className="font-semibold text-sm">{player.name}</span>
+      </div>
+      <div className="flex items-center gap-0.5 text-xs text-gray-500">
+        <Trophy className="h-3 w-3 shrink-0" />
+        <span>{gameCount}게임</span>
+      </div>
+      <div className="flex flex-wrap justify-center gap-1">
+        {player.pinned && (
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 bg-yellow-50 text-yellow-700 border-yellow-300 leading-4"
+          >
+            <Star className="h-2.5 w-2.5 mr-0.5 fill-yellow-400" />
+            필수
+          </Badge>
+        )}
+        {player.skillLevel && (
+          <Badge className={`text-[10px] px-1.5 py-0 leading-4 ${getSkillLevelColor(player.skillLevel)}`}>
+            {player.skillLevel}
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
 }
 
+// ─── 공동 게임 횟수 → 색상 ────────────────────────────────────────
+function getCoPlayColors(count: number): { fill: string; stroke: string } {
+  if (count === 0) return { fill: '#16a34a', stroke: '#bbf7d0' }; // green  – 첫조합
+  if (count <= 2) return { fill: '#6b7280', stroke: '#e5e7eb' }; // gray   – 1~2회
+  if (count <= 4) return { fill: '#d97706', stroke: '#fde68a' }; // amber  – 3~4회
+  return { fill: '#dc2626', stroke: '#fecaca' }; // red    – 5회+
+}
+
+// ─── SVG 엣지 라벨 ───────────────────────────────────────────────
+function EdgeLabel({ x, y, count }: { x: number; y: number; count: number }) {
+  const label = count === 0 ? '첫조합' : `${count}회`;
+  const { fill, stroke: bgStroke } = getCoPlayColors(count);
+  const bgW = count === 0 ? 38 : 22;
+
+  return (
+    <>
+      <rect x={x - bgW / 2} y={y - 9} width={bgW} height={18} rx={9} fill="white" stroke={bgStroke} strokeWidth={1} />
+      <text
+        x={x}
+        y={y}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize={10}
+        fill={fill}
+        fontWeight={count === 0 ? 600 : 500}
+      >
+        {label}
+      </text>
+    </>
+  );
+}
+
+// ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function TeamPicker({
   players,
   games,
-  pickedTeams,
+  pickedPlayers,
   onRandomPick,
   onConfirm,
   onReject,
@@ -57,37 +152,18 @@ export default function TeamPicker({
   const activePlayers = players.filter((p) => p.status === 'active');
   const canPick = activePlayers.length >= 4;
 
-  // 선수별 게임 수 계산
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    games.forEach((game) => {
-      [game.teamA[0], game.teamA[1], game.teamB[0], game.teamB[1]].forEach((playerId) => {
-        counts.set(playerId, (counts.get(playerId) || 0) + 1);
-      });
-    });
+    games.forEach((game) => game.players.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
     return counts;
   }, [games]);
 
-  // 페어가 함께 게임한 횟수 계산
-  const getPartnerCount = (playerId1: string, playerId2: string): number => {
-    let count = 0;
-    games.forEach((game) => {
-      const teamA = game.teamA;
-      const teamB = game.teamB;
+  const coPlay = useMemo(
+    () => (id1: string, id2: string) => games.filter((g) => g.players.includes(id1) && g.players.includes(id2)).length,
+    [games],
+  );
 
-      if (
-        (teamA[0] === playerId1 && teamA[1] === playerId2) ||
-        (teamA[1] === playerId1 && teamA[0] === playerId2) ||
-        (teamB[0] === playerId1 && teamB[1] === playerId2) ||
-        (teamB[1] === playerId1 && teamB[0] === playerId2)
-      ) {
-        count++;
-      }
-    });
-    return count;
-  };
-
-  if (!pickedTeams) {
+  if (!pickedPlayers) {
     return (
       <div className="text-center space-y-4">
         <Button onClick={onRandomPick} disabled={!canPick} size="lg" className="w-full md:w-auto">
@@ -100,237 +176,65 @@ export default function TeamPicker({
     );
   }
 
-  const teamAPartnerCount = getPartnerCount(pickedTeams.teamA[0].id, pickedTeams.teamA[1].id);
-  const teamBPartnerCount = getPartnerCount(pickedTeams.teamB[0].id, pickedTeams.teamB[1].id);
+  const [p0, p1, p2, p3] = pickedPlayers;
+  const gc = (p: Player) => playerGameCounts.get(p.id) || 0;
 
-  // 각 선수가 상대팀 선수들과 게임한 횟수 계산
-  const getOpponentCount = (player1Id: string, player2Id: string): number => {
-    let count = 0;
-    games.forEach((game) => {
-      // player1이 Team A, player2가 Team B인 경우
-      if (
-        (game.teamA.includes(player1Id) && game.teamB.includes(player2Id)) ||
-        (game.teamB.includes(player1Id) && game.teamA.includes(player2Id))
-      ) {
-        count++;
-      }
-    });
-    return count;
-  };
-
-  // 전체 4명이 함께 게임한 횟수 (정확히 같은 매치업)
-  const exactMatchCount = games.filter((game) => {
-    const aIds = [pickedTeams.teamA[0].id, pickedTeams.teamA[1].id];
-    const bIds = [pickedTeams.teamB[0].id, pickedTeams.teamB[1].id];
-    return (
-      (game.teamA.every((id) => aIds.includes(id)) && game.teamB.every((id) => bIds.includes(id))) ||
-      (game.teamA.every((id) => bIds.includes(id)) && game.teamB.every((id) => aIds.includes(id)))
-    );
-  }).length;
-
-  // 크로스 매치 카운트 (팀A-팀B 간의 모든 조합)
-  const crossMatchCounts = {
-    a1_b1: getOpponentCount(pickedTeams.teamA[0].id, pickedTeams.teamB[0].id),
-    a1_b2: getOpponentCount(pickedTeams.teamA[0].id, pickedTeams.teamB[1].id),
-    a2_b1: getOpponentCount(pickedTeams.teamA[1].id, pickedTeams.teamB[0].id),
-    a2_b2: getOpponentCount(pickedTeams.teamA[1].id, pickedTeams.teamB[1].id),
-  };
-
-  const totalCrossMatches = Object.values(crossMatchCounts).reduce((sum, count) => sum + count, 0);
+  const c01 = coPlay(p0.id, p1.id);
+  const c23 = coPlay(p2.id, p3.id);
+  const c02 = coPlay(p0.id, p2.id);
+  const c13 = coPlay(p1.id, p3.id);
+  const c03 = coPlay(p0.id, p3.id); // 대각선
+  const c12 = coPlay(p1.id, p2.id); // 대각선
 
   return (
     <AnimatePresence>
       <div className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* Team A */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <Card className="bg-blue-50 border-blue-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base md:text-lg text-blue-800 flex items-center justify-between">
-                  <span>Team A</span>
-                  {teamAPartnerCount > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      <Users className="h-3 w-3 mr-1" />
-                      {teamAPartnerCount}회 페어
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                {pickedTeams.teamA.map((player) => {
-                  const ageLabel = getAgeGroupLabel(player.ageGroup);
-                  const gameCount = playerGameCounts.get(player.id) || 0;
-                  const isPinned = player.pinned === true;
-                  return (
-                    <div key={player.id} className="flex items-center gap-2 p-2 bg-white rounded flex-wrap">
-                      <span className="text-lg">{getGenderIcon(player.gender)}</span>
-                      <span className="font-medium">{player.name}</span>
-                      {isPinned && (
-                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                          <Star className="h-3 w-3 mr-1 fill-yellow-400" />
-                          필수
-                        </Badge>
-                      )}
-                      {player.skillLevel && (
-                        <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                      )}
-                      {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
-                      <Badge variant="outline" className="text-xs ml-auto">
-                        <Trophy className="h-3 w-3 mr-1" />
-                        {gameCount}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </motion.div>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          {/* 고정 크기 컨테이너 – 가운데 정렬 */}
+          <div className="flex justify-center">
+            <div className="relative" style={{ width: SVG_W, height: SVG_H }}>
+              {/* SVG 선 레이어 (카드 뒤) */}
+              <svg className="absolute inset-0" width={SVG_W} height={SVG_H} style={{ zIndex: 0 }}>
+                {/* 4개 엣지 선 */}
+                <line {...EDGE_TOP} stroke="#d1d5db" strokeWidth={1.5} />
+                <line {...EDGE_BOTTOM} stroke="#d1d5db" strokeWidth={1.5} />
+                <line {...EDGE_LEFT} stroke="#d1d5db" strokeWidth={1.5} />
+                <line {...EDGE_RIGHT} stroke="#d1d5db" strokeWidth={1.5} />
+                {/* 대각선 */}
+                <line {...EDGE_DIAG_A} stroke="#d1d5db" strokeWidth={1} />
+                <line {...EDGE_DIAG_B} stroke="#d1d5db" strokeWidth={1} />
 
-          {/* Team B */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <Card className="bg-red-50 border-red-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-red-800 flex items-center justify-between">
-                  <span>Team B</span>
-                  {teamBPartnerCount > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      <Users className="h-3 w-3 mr-1" />
-                      {teamBPartnerCount}회 페어
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                {pickedTeams.teamB.map((player) => {
-                  const ageLabel = getAgeGroupLabel(player.ageGroup);
-                  const gameCount = playerGameCounts.get(player.id) || 0;
-                  const isPinned = player.pinned === true;
-                  return (
-                    <div key={player.id} className="flex items-center gap-2 p-2 bg-white rounded flex-wrap">
-                      <span className="text-lg">{getGenderIcon(player.gender)}</span>
-                      <span className="font-medium">{player.name}</span>
-                      {isPinned && (
-                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                          <Star className="h-3 w-3 mr-1 fill-yellow-400" />
-                          필수
-                        </Badge>
-                      )}
-                      {player.skillLevel && (
-                        <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                      )}
-                      {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
-                      <Badge variant="outline" className="text-xs ml-auto">
-                        <Trophy className="h-3 w-3 mr-1" />
-                        {gameCount}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+                {/* 엣지 라벨 */}
+                <EdgeLabel x={LBL_TOP.x} y={LBL_TOP.y} count={c01} />
+                <EdgeLabel x={LBL_BOTTOM.x} y={LBL_BOTTOM.y} count={c23} />
+                <EdgeLabel x={LBL_LEFT.x} y={LBL_LEFT.y} count={c02} />
+                <EdgeLabel x={LBL_RIGHT.x} y={LBL_RIGHT.y} count={c13} />
+                <EdgeLabel x={LBL_DIAG_A.x} y={LBL_DIAG_A.y} count={c03} />
+                <EdgeLabel x={LBL_DIAG_B.x} y={LBL_DIAG_B.y} count={c12} />
+              </svg>
 
-        {/* Match Statistics */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
-          <Card className="bg-gray-50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm md:text-base">매칭 통계</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 pt-0">
-              {/* 정확히 같은 매치업 */}
-              {exactMatchCount > 0 && (
-                <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm font-medium text-yellow-800">⚠️ 이 조합으로 {exactMatchCount}회 게임했습니다</p>
-                </div>
-              )}
-
-              {/* 팀 내 페어 정보 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="text-sm">
-                  <p className="text-gray-600 mb-1">Team A 페어</p>
-                  <p className="font-medium">
-                    {pickedTeams.teamA[0].name} & {pickedTeams.teamA[1].name}
-                  </p>
-                  {teamAPartnerCount > 0 ? (
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      함께 {teamAPartnerCount}회
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700 border-green-200">
-                      첫 페어 ✨
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-sm">
-                  <p className="text-gray-600 mb-1">Team B 페어</p>
-                  <p className="font-medium">
-                    {pickedTeams.teamB[0].name} & {pickedTeams.teamB[1].name}
-                  </p>
-                  {teamBPartnerCount > 0 ? (
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      함께 {teamBPartnerCount}회
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700 border-green-200">
-                      첫 페어 ✨
-                    </Badge>
-                  )}
-                </div>
+              {/* 카드 레이어 (SVG 위) */}
+              <div className="absolute" style={{ left: 0, top: 0 }}>
+                <PlayerCard player={p0} gameCount={gc(p0)} />
               </div>
-
-              {/* 대전 기록 */}
-              <div>
-                <p className="text-sm text-gray-600 mb-2">대전 기록 (맞상대로 게임한 횟수)</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex justify-between p-2 bg-white rounded border">
-                    <span className="text-gray-600">
-                      {pickedTeams.teamA[0].name} vs {pickedTeams.teamB[0].name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {crossMatchCounts.a1_b1}회
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between p-2 bg-white rounded border">
-                    <span className="text-gray-600">
-                      {pickedTeams.teamA[0].name} vs {pickedTeams.teamB[1].name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {crossMatchCounts.a1_b2}회
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between p-2 bg-white rounded border">
-                    <span className="text-gray-600">
-                      {pickedTeams.teamA[1].name} vs {pickedTeams.teamB[0].name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {crossMatchCounts.a2_b1}회
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between p-2 bg-white rounded border">
-                    <span className="text-gray-600">
-                      {pickedTeams.teamA[1].name} vs {pickedTeams.teamB[1].name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {crossMatchCounts.a2_b2}회
-                    </Badge>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">총 대전: {totalCrossMatches}회</p>
+              <div className="absolute" style={{ left: CARD_W + H_GAP, top: 0 }}>
+                <PlayerCard player={p1} gameCount={gc(p1)} />
               </div>
-            </CardContent>
-          </Card>
+              <div className="absolute" style={{ left: 0, top: CARD_H + V_GAP }}>
+                <PlayerCard player={p2} gameCount={gc(p2)} />
+              </div>
+              <div className="absolute" style={{ left: CARD_W + H_GAP, top: CARD_H + V_GAP }}>
+                <PlayerCard player={p3} gameCount={gc(p3)} />
+              </div>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Action Buttons */}
+        {/* 확정 / 다시 뽑기 */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
           className="flex gap-3 justify-center"
         >
           <Button onClick={onConfirm} size="lg" className="flex-1 md:flex-none">

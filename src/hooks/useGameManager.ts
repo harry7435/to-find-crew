@@ -13,13 +13,40 @@ export interface Player {
 
 export interface GameRecord {
   id: string;
-  teamA: [string, string];
-  teamB: [string, string];
+  players: [string, string, string, string];
   confirmedAt: string;
 }
 
 const PLAYERS_KEY = 'game-manager-players';
 const GAMES_KEY = 'game-manager-games';
+
+// 기존 데이터 형식 (teamA/teamB)
+interface LegacyGameRecord {
+  id: string;
+  teamA: [string, string];
+  teamB: [string, string];
+  confirmedAt: string;
+}
+
+type RawGameRecord = GameRecord | LegacyGameRecord;
+
+function isLegacyGameRecord(game: RawGameRecord): game is LegacyGameRecord {
+  return 'teamA' in game && 'teamB' in game && !('players' in game);
+}
+
+// 기존 데이터를 새 형식으로 마이그레이션
+function migrateOldGameRecords(games: RawGameRecord[]): GameRecord[] {
+  return games.map((game) => {
+    if (isLegacyGameRecord(game)) {
+      return {
+        id: game.id,
+        players: [game.teamA[0], game.teamA[1], game.teamB[0], game.teamB[1]] as [string, string, string, string],
+        confirmedAt: game.confirmedAt,
+      };
+    }
+    return game;
+  });
+}
 
 export function useGameManager() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -36,7 +63,9 @@ export function useGameManager() {
         setPlayers(JSON.parse(storedPlayers));
       }
       if (storedGames) {
-        setGames(JSON.parse(storedGames));
+        const parsed = JSON.parse(storedGames) as RawGameRecord[];
+        const migrated = migrateOldGameRecords(parsed);
+        setGames(migrated);
       }
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
