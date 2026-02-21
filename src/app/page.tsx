@@ -26,7 +26,7 @@ export default function Home() {
 
         {/* Badminton Section */}
         <section className="container mx-auto p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
             {/* <Card className="text-center">
               <CardHeader>
                 <CardTitle className="text-xl">번개 생성</CardTitle>
@@ -53,7 +53,7 @@ export default function Home() {
               </CardContent>
             </Card> */}
 
-            <Card className="text-center">
+            <Card className="text-center w-full min-w-64 max-w-xs">
               <CardHeader>
                 <CardTitle className="text-xl">게임 관리</CardTitle>
                 <CardDescription>선수 등록과 랜덤 팀 뽑기</CardDescription>
