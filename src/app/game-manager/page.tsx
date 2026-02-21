@@ -298,11 +298,15 @@ export default function GameManagerPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base md:text-lg flex items-center justify-between">
             <span>팀 뽑기</span>
-            {!pickedPlayers && !isCustomPicking && (
-              <Button variant="outline" size="sm" onClick={() => setIsCustomPicking(true)}>
-                직접 선택
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsCustomPicking(true);
+              }}
+            >
+              직접 선택
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
@@ -310,7 +314,10 @@ export default function GameManagerPage() {
             <CustomTeamPicker
               players={players}
               onConfirm={handleCustomConfirm}
-              onCancel={() => setIsCustomPicking(false)}
+              onCancel={() => {
+                setIsCustomPicking(false);
+                setPickedPlayers(null);
+              }}
             />
           ) : (
             <TeamPicker
