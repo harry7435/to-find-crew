@@ -26,14 +26,13 @@ function shuffleArray<T>(array: T[]): T[] {
 function getPartnerCount(playerId1: string, playerId2: string, games: GameRecord[]): number {
   let count = 0;
   games.forEach((game) => {
-    const teamA = game.teamA;
-    const teamB = game.teamB;
+    const [a0, a1, b0, b1] = game.players;
 
     if (
-      (teamA[0] === playerId1 && teamA[1] === playerId2) ||
-      (teamA[1] === playerId1 && teamA[0] === playerId2) ||
-      (teamB[0] === playerId1 && teamB[1] === playerId2) ||
-      (teamB[1] === playerId1 && teamB[0] === playerId2)
+      (a0 === playerId1 && a1 === playerId2) ||
+      (a1 === playerId1 && a0 === playerId2) ||
+      (b0 === playerId1 && b1 === playerId2) ||
+      (b1 === playerId1 && b0 === playerId2)
     ) {
       count++;
     }
@@ -46,14 +45,15 @@ function getPlayerStats(players: Player[], games: GameRecord[]): Map<string, Pla
   const statsMap = new Map<string, PlayerWithStats>();
 
   players.forEach((player) => {
-    const gameCount = games.filter((game) => game.teamA.includes(player.id) || game.teamB.includes(player.id)).length;
+    const gameCount = games.filter((game) => game.players.includes(player.id)).length;
 
     const partners = new Set<string>();
     games.forEach((game) => {
-      if (game.teamA[0] === player.id) partners.add(game.teamA[1]);
-      if (game.teamA[1] === player.id) partners.add(game.teamA[0]);
-      if (game.teamB[0] === player.id) partners.add(game.teamB[1]);
-      if (game.teamB[1] === player.id) partners.add(game.teamB[0]);
+      const [a0, a1, b0, b1] = game.players;
+      if (a0 === player.id) partners.add(a1);
+      if (a1 === player.id) partners.add(a0);
+      if (b0 === player.id) partners.add(b1);
+      if (b1 === player.id) partners.add(b0);
     });
 
     statsMap.set(player.id, {
@@ -94,10 +94,13 @@ function calculateTeamScore(
   games.forEach((game) => {
     const aIds = [teamA[0].id, teamA[1].id];
     const bIds = [teamB[0].id, teamB[1].id];
+    const [ga0, ga1, gb0, gb1] = game.players;
+    const gTeamA = [ga0, ga1];
+    const gTeamB = [gb0, gb1];
 
     const isExactMatch =
-      (game.teamA.every((id) => aIds.includes(id)) && game.teamB.every((id) => bIds.includes(id))) ||
-      (game.teamA.every((id) => bIds.includes(id)) && game.teamB.every((id) => aIds.includes(id)));
+      (gTeamA.every((id) => aIds.includes(id)) && gTeamB.every((id) => bIds.includes(id))) ||
+      (gTeamA.every((id) => bIds.includes(id)) && gTeamB.every((id) => aIds.includes(id)));
 
     if (isExactMatch) {
       score += 100; // 정확히 같은 매치업이면 큰 페널티
