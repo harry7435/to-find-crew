@@ -11,7 +11,7 @@ export default function Home() {
         {/* Hero Section */}
         <section className="container mx-auto px-4 pt-10 pb-4 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">To Find Crew 🏸</h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground mb-4 max-w-2xl mx-auto">
             관심사가 비슷한 사람들과 크루를 만들고
             <br />
             번개 모임을 운영해보세요
@@ -60,6 +60,20 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <Link href="/game-manager" className="cursor-pointer">
+                  <Button variant="outline" className="w-full">
+                    시작하기
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center w-full min-w-64 max-w-xs">
+              <CardHeader>
+                <CardTitle className="text-xl">랜덤 뽑기</CardTitle>
+                <CardDescription>손가락으로 당첨자를 뽑아요</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/random-picker" className="cursor-pointer">
                   <Button variant="outline" className="w-full">
                     시작하기
                   </Button>
