@@ -176,6 +176,10 @@ export function useGameManager() {
     setCourts((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
+  const renameCourt = useCallback((id: string, name: string) => {
+    setCourts((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
+  }, []);
+
   const assignCourtGame = useCallback((courtId: string, playerIds: [string, string, string, string]) => {
     setCourts((prev) =>
       prev.map((c) => (c.id === courtId ? { ...c, playerIds, gameStartedAt: new Date().toISOString() } : c)),
@@ -213,6 +217,7 @@ export function useGameManager() {
     resetGames,
     addCourt,
     removeCourt,
+    renameCourt,
     assignCourtGame,
     endCourtGame,
     resetCourts,

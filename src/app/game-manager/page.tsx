@@ -31,6 +31,7 @@ export default function GameManagerPage() {
     resetGames,
     addCourt,
     removeCourt,
+    renameCourt,
     assignCourtGame,
     endCourtGame,
     isLoading,
@@ -131,10 +132,19 @@ export default function GameManagerPage() {
     [pickedPlayers, courts, addGame, assignCourtGame],
   );
 
-  const handleAddCourt = useCallback(() => {
-    const nextNumber = courts.length + 1;
-    addCourt(`코트 ${nextNumber}`);
-  }, [courts.length, addCourt]);
+  const handleAddCourt = useCallback(
+    (name: string) => {
+      addCourt(name);
+    },
+    [addCourt],
+  );
+
+  const handleRenameCourt = useCallback(
+    (id: string, name: string) => {
+      renameCourt(id, name);
+    },
+    [renameCourt],
+  );
 
   const handleRemoveCourt = useCallback(
     (id: string) => {
@@ -436,6 +446,7 @@ export default function GameManagerPage() {
             players={players}
             onAddCourt={handleAddCourt}
             onRemoveCourt={handleRemoveCourt}
+            onRenameCourt={handleRenameCourt}
             onEndGame={handleEndCourtGame}
           />
         </CardContent>
