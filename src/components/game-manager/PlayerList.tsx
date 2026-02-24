@@ -3,7 +3,7 @@
 import { Player } from '@/hooks/useGameManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Trophy, Edit, Coffee, Play, Star } from 'lucide-react';
+import { X, Trophy, Edit, Coffee, Play, Star, Swords } from 'lucide-react';
 
 interface PlayerListProps {
   players: Player[];
@@ -68,12 +68,19 @@ export default function PlayerList({
         const gameCount = gameCountsMap?.get(player.id) || 0;
         const ageLabel = getAgeGroupLabel(player.ageGroup);
         const isResting = player.status === 'resting';
+        const isPlaying = player.status === 'playing';
         const isPinned = player.pinned === true;
         return (
           <div
             key={player.id}
             className={`flex items-center justify-between p-2 border rounded-lg hover:shadow-md transition-shadow ${
-              isResting ? 'bg-gray-50 opacity-70' : isPinned ? 'bg-yellow-50 border-yellow-300' : ''
+              isPlaying
+                ? 'bg-green-50 border-green-300'
+                : isResting
+                  ? 'bg-gray-50 opacity-70'
+                  : isPinned
+                    ? 'bg-yellow-50 border-yellow-300'
+                    : ''
             }`}
           >
             <div className="flex items-center gap-2 flex-1">
@@ -85,6 +92,12 @@ export default function PlayerList({
                     <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
                   )}
                   {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
+                  {isPlaying && (
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                      <Swords className="h-3 w-3 mr-1" />
+                      게임중
+                    </Badge>
+                  )}
                   {isResting && (
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                       <Coffee className="h-3 w-3 mr-1" />
@@ -112,7 +125,7 @@ export default function PlayerList({
                 size="sm"
                 onClick={() => onTogglePinned(player.id)}
                 title={isPinned ? '필수 포함 해제' : '필수 포함 설정'}
-                disabled={isResting}
+                disabled={isResting || isPlaying}
               >
                 <Star className={`h-4 w-4 ${isPinned ? 'fill-yellow-400 text-yellow-400' : ''}`} />
               </Button>
@@ -121,13 +134,14 @@ export default function PlayerList({
                 size="sm"
                 onClick={() => onToggleStatus(player.id)}
                 title={isResting ? '게임 복귀' : '휴식 설정'}
+                disabled={isPlaying}
               >
                 {isResting ? <Play className="h-4 w-4" /> : <Coffee className="h-4 w-4" />}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onEditPlayer(player)}>
+              <Button variant="ghost" size="sm" onClick={() => onEditPlayer(player)} disabled={isPlaying}>
                 <Edit className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onRemovePlayer(player.id)}>
+              <Button variant="ghost" size="sm" onClick={() => onRemovePlayer(player.id)} disabled={isPlaying}>
                 <X className="h-4 w-4" />
               </Button>
             </div>

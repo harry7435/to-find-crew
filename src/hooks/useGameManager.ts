@@ -7,7 +7,7 @@ export interface Player {
   gender?: 'male' | 'female';
   skillLevel?: 'S' | 'A' | 'B' | 'C' | 'D' | 'E';
   ageGroup?: '10s' | '20s' | '30s' | '40s' | '50s' | '60s+';
-  status: 'active' | 'resting'; // active: 게임 가능, resting: 휴식중
+  status: 'active' | 'resting' | 'playing'; // active: 게임 가능, resting: 휴식중, playing: 게임중
   pinned?: boolean; // true: 무조건 포함, false/undefined: 일반
 }
 
@@ -17,8 +17,16 @@ export interface GameRecord {
   confirmedAt: string;
 }
 
+export interface Court {
+  id: string;
+  name: string;
+  playerIds: [string, string, string, string] | null; // null = 빈 코트
+  gameStartedAt: string | null;
+}
+
 const PLAYERS_KEY = 'game-manager-players';
 const GAMES_KEY = 'game-manager-games';
+const COURTS_KEY = 'game-manager-courts';
 
 // 기존 데이터 형식 (teamA/teamB)
 interface LegacyGameRecord {
@@ -51,6 +59,7 @@ function migrateOldGameRecords(games: RawGameRecord[]): GameRecord[] {
 export function useGameManager() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [games, setGames] = useState<GameRecord[]>([]);
+  const [courts, setCourts] = useState<Court[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load from localStorage on mount
@@ -58,6 +67,7 @@ export function useGameManager() {
     try {
       const storedPlayers = localStorage.getItem(PLAYERS_KEY);
       const storedGames = localStorage.getItem(GAMES_KEY);
+      const storedCourts = localStorage.getItem(COURTS_KEY);
 
       if (storedPlayers) {
         setPlayers(JSON.parse(storedPlayers));
@@ -66,6 +76,9 @@ export function useGameManager() {
         const parsed = JSON.parse(storedGames) as RawGameRecord[];
         const migrated = migrateOldGameRecords(parsed);
         setGames(migrated);
+      }
+      if (storedCourts) {
+        setCourts(JSON.parse(storedCourts));
       }
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
@@ -98,6 +111,18 @@ export function useGameManager() {
       }
     }
   }, [games, isLoading]);
+
+  // Save courts to localStorage
+  useEffect(() => {
+    if (!isLoading) {
+      try {
+        localStorage.setItem(COURTS_KEY, JSON.stringify(courts));
+      } catch (error) {
+        console.error('Failed to save courts:', error);
+        toast.error('코트 데이터 저장에 실패했습니다');
+      }
+    }
+  }, [courts, isLoading]);
 
   const addPlayer = useCallback((playerData: Omit<Player, 'id' | 'status'>) => {
     const newPlayer: Player = {
@@ -137,9 +162,48 @@ export function useGameManager() {
     setGames([]);
   }, []);
 
+  const addCourt = useCallback((name: string) => {
+    const newCourt: Court = {
+      id: crypto.randomUUID(),
+      name,
+      playerIds: null,
+      gameStartedAt: null,
+    };
+    setCourts((prev) => [...prev, newCourt]);
+  }, []);
+
+  const removeCourt = useCallback((id: string) => {
+    setCourts((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const assignCourtGame = useCallback((courtId: string, playerIds: [string, string, string, string]) => {
+    setCourts((prev) =>
+      prev.map((c) => (c.id === courtId ? { ...c, playerIds, gameStartedAt: new Date().toISOString() } : c)),
+    );
+    setPlayers((prev) => prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'playing' as const } : p)));
+  }, []);
+
+  const endCourtGame = useCallback((courtId: string) => {
+    setCourts((prev) => {
+      const court = prev.find((c) => c.id === courtId);
+      if (court?.playerIds) {
+        const playerIds = court.playerIds;
+        setPlayers((prevPlayers) =>
+          prevPlayers.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const } : p)),
+        );
+      }
+      return prev.map((c) => (c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null } : c));
+    });
+  }, []);
+
+  const resetCourts = useCallback(() => {
+    setCourts([]);
+  }, []);
+
   return {
     players,
     games,
+    courts,
     addPlayer,
     removePlayer,
     updatePlayer,
@@ -147,6 +211,11 @@ export function useGameManager() {
     removeGame,
     resetPlayers,
     resetGames,
+    addCourt,
+    removeCourt,
+    assignCourtGame,
+    endCourtGame,
+    resetCourts,
     isLoading,
   };
 }

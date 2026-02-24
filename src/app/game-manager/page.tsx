@@ -13,6 +13,7 @@ import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
 import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
 import GameHistory from '@/components/game-manager/GameHistory';
+import CourtManager from '@/components/game-manager/CourtManager';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
 
 export default function GameManagerPage() {
@@ -20,6 +21,7 @@ export default function GameManagerPage() {
   const {
     players,
     games,
+    courts,
     addPlayer,
     removePlayer,
     updatePlayer,
@@ -27,11 +29,16 @@ export default function GameManagerPage() {
     removeGame,
     resetPlayers,
     resetGames,
+    addCourt,
+    removeCourt,
+    assignCourtGame,
+    endCourtGame,
     isLoading,
   } = useGameManager();
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
+  const [isSelectingCourt, setIsSelectingCourt] = useState(false);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -88,19 +95,70 @@ export default function GameManagerPage() {
   const handleConfirmGame = useCallback(() => {
     if (!pickedPlayers) return;
 
-    addGame({
-      players: pickedPlayers.map((p) => p.id) as [string, string, string, string],
-    });
+    if (courts.length === 0) {
+      toast.error('코트를 먼저 추가해주세요');
+      return;
+    }
 
-    const playerNames = pickedPlayers.map((p) => p.name).join(', ');
+    const freeCourts = courts.filter((c) => c.playerIds === null);
+    if (freeCourts.length === 0) {
+      toast.error('모든 코트가 사용중입니다. 게임을 종료하거나 코트를 추가하세요');
+      return;
+    }
 
-    toast.success('게임이 확정되었습니다!', {
-      description: `선수: ${playerNames}`,
-      duration: 5000,
-    });
-    setPickedPlayers(null);
-    setIsCustomPicking(false);
-  }, [pickedPlayers, addGame]);
+    setIsSelectingCourt(true);
+  }, [pickedPlayers, courts]);
+
+  const handleAssignCourt = useCallback(
+    (courtId: string) => {
+      if (!pickedPlayers) return;
+
+      const playerIds = pickedPlayers.map((p) => p.id) as [string, string, string, string];
+      addGame({ players: playerIds });
+      assignCourtGame(courtId, playerIds);
+
+      const court = courts.find((c) => c.id === courtId);
+      const playerNames = pickedPlayers.map((p) => p.name).join(', ');
+
+      toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`, {
+        description: `선수: ${playerNames}`,
+        duration: 5000,
+      });
+      setPickedPlayers(null);
+      setIsSelectingCourt(false);
+      setIsCustomPicking(false);
+    },
+    [pickedPlayers, courts, addGame, assignCourtGame],
+  );
+
+  const handleAddCourt = useCallback(() => {
+    const nextNumber = courts.length + 1;
+    addCourt(`코트 ${nextNumber}`);
+  }, [courts.length, addCourt]);
+
+  const handleRemoveCourt = useCallback(
+    (id: string) => {
+      const court = courts.find((c) => c.id === id);
+      if (court?.playerIds !== null) {
+        toast.error('게임중인 코트는 삭제할 수 없습니다');
+        return;
+      }
+      removeCourt(id);
+    },
+    [courts, removeCourt],
+  );
+
+  const handleEndCourtGame = useCallback(
+    (id: string) => {
+      const court = courts.find((c) => c.id === id);
+      if (!court?.playerIds) return;
+      if (confirm(`${court.name} 게임을 종료하시겠습니까?`)) {
+        endCourtGame(id);
+        toast.success(`${court.name} 게임이 종료되었습니다. 선수들이 복귀했습니다`);
+      }
+    },
+    [courts, endCourtGame],
+  );
 
   const handleRejectPick = useCallback(() => {
     // 다시 랜덤 뽑기 실행
@@ -274,9 +332,13 @@ export default function GameManagerPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base md:text-lg">
             등록된 선수 ({players.length}명)
-            {players.filter((p) => p.status === 'resting').length > 0 && (
+            {(players.some((p) => p.status === 'resting') || players.some((p) => p.status === 'playing')) && (
               <span className="text-sm text-gray-500 ml-2">
-                (활성: {players.filter((p) => p.status === 'active').length}명)
+                (활성: {players.filter((p) => p.status === 'active').length}명
+                {players.some((p) => p.status === 'playing') && (
+                  <> · 게임중: {players.filter((p) => p.status === 'playing').length}명</>
+                )}
+                )
               </span>
             )}
           </CardTitle>
@@ -329,6 +391,53 @@ export default function GameManagerPage() {
               onReject={handleRejectPick}
             />
           )}
+
+          {/* 코트 선택 패널 */}
+          {isSelectingCourt && pickedPlayers && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-800 mb-2">배정할 코트를 선택하세요</p>
+              <div className="flex flex-wrap gap-2">
+                {courts
+                  .filter((c) => c.playerIds === null)
+                  .map((court) => (
+                    <Button key={court.id} onClick={() => handleAssignCourt(court.id)} size="sm">
+                      {court.name}
+                    </Button>
+                  ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSelectingCourt(false)}
+                className="mt-2 w-full text-gray-500"
+              >
+                취소
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 3.5: Court Manager */}
+      <Card className="mb-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base md:text-lg">
+            코트 관리
+            {courts.some((c) => c.playerIds !== null) && (
+              <span className="text-sm text-gray-500 ml-2">
+                (게임중: {courts.filter((c) => c.playerIds !== null).length}개)
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <CourtManager
+            courts={courts}
+            players={players}
+            onAddCourt={handleAddCourt}
+            onRemoveCourt={handleRemoveCourt}
+            onEndGame={handleEndCourtGame}
+          />
         </CardContent>
       </Card>
 
