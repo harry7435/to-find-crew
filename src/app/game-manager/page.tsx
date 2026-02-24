@@ -4,7 +4,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGameManager, Player } from '@/hooks/useGameManager';
 import PlayerForm from '@/components/game-manager/PlayerForm';
@@ -40,6 +41,18 @@ export default function GameManagerPage() {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isSelectingCourt, setIsSelectingCourt] = useState(false);
+  const [openSections, setOpenSections] = useState({
+    registration: false,
+    playerList: true,
+    teamPicker: true,
+    courtManager: true,
+    gameHistory: false,
+    resetActions: false,
+  });
+
+  const toggleSection = useCallback((key: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -328,162 +341,218 @@ export default function GameManagerPage() {
       </div>
 
       {/* Section 1: Player Registration */}
-      <Card className="mb-3">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg">선수 등록</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <PlayerForm onAddPlayer={handleAddPlayer} />
-        </CardContent>
-      </Card>
+      <Collapsible open={openSections.registration} onOpenChange={() => toggleSection('registration')}>
+        <Card className="mb-3">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">선수 등록</CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.registration ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <PlayerForm onAddPlayer={handleAddPlayer} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Section 2: Player List */}
-      <Card className="mb-3">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg">
-            등록된 선수 ({players.length}명)
-            {(players.some((p) => p.status === 'resting') || players.some((p) => p.status === 'playing')) && (
-              <span className="text-sm text-gray-500 ml-2">
-                (활성: {players.filter((p) => p.status === 'active').length}명
-                {players.some((p) => p.status === 'playing') && (
-                  <> · 게임중: {players.filter((p) => p.status === 'playing').length}명</>
-                )}
-                )
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <PlayerList
-            players={players}
-            onRemovePlayer={handleRemovePlayer}
-            onEditPlayer={handleEditPlayer}
-            onToggleStatus={handleToggleStatus}
-            onTogglePinned={handleTogglePinned}
-            gameCountsMap={playerGameCounts}
-          />
-        </CardContent>
-      </Card>
+      <Collapsible open={openSections.playerList} onOpenChange={() => toggleSection('playerList')}>
+        <Card className="mb-3">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">
+                  등록된 선수 ({players.length}명)
+                  {(players.some((p) => p.status === 'resting') || players.some((p) => p.status === 'playing')) && (
+                    <span className="text-sm text-gray-500 ml-2">
+                      (활성: {players.filter((p) => p.status === 'active').length}명
+                      {players.some((p) => p.status === 'playing') && (
+                        <> · 게임중: {players.filter((p) => p.status === 'playing').length}명</>
+                      )}
+                      )
+                    </span>
+                  )}
+                </CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.playerList ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <PlayerList
+                players={players}
+                onRemovePlayer={handleRemovePlayer}
+                onEditPlayer={handleEditPlayer}
+                onToggleStatus={handleToggleStatus}
+                onTogglePinned={handleTogglePinned}
+                gameCountsMap={playerGameCounts}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Section 3: Team Picker */}
-      <Card className="mb-3">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg flex items-center justify-between">
-            <span>팀 뽑기</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsCustomPicking(true);
-              }}
-            >
-              직접 선택
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isCustomPicking ? (
-            <CustomTeamPicker
-              players={players}
-              onConfirm={handleCustomConfirm}
-              onCancel={() => {
-                setIsCustomPicking(false);
-                setPickedPlayers(null);
-              }}
-            />
-          ) : (
-            <TeamPicker
-              players={players}
-              games={games}
-              pickedPlayers={pickedPlayers}
-              onRandomPick={handleRandomPickTeams}
-              onConfirm={handleConfirmGame}
-              onReject={handleRejectPick}
-            />
-          )}
-
-          {/* 코트 선택 패널 */}
-          {isSelectingCourt && pickedPlayers && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm font-medium text-blue-800 mb-2">배정할 코트를 선택하세요</p>
-              <div className="flex flex-wrap gap-2">
-                {courts
-                  .filter((c) => c.playerIds === null)
-                  .map((court) => (
-                    <Button key={court.id} onClick={() => handleAssignCourt(court.id)} size="sm">
-                      {court.name}
-                    </Button>
-                  ))}
+      <Collapsible open={openSections.teamPicker} onOpenChange={() => toggleSection('teamPicker')}>
+        <Card className="mb-3">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">팀 뽑기</CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.teamPicker ? 'rotate-180' : ''}`}
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsSelectingCourt(false)}
-                className="mt-2 w-full text-gray-500"
-              >
-                취소
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              {isCustomPicking ? (
+                <CustomTeamPicker
+                  players={players}
+                  onConfirm={handleCustomConfirm}
+                  onCancel={() => {
+                    setIsCustomPicking(false);
+                    setPickedPlayers(null);
+                  }}
+                />
+              ) : (
+                <TeamPicker
+                  players={players}
+                  games={games}
+                  pickedPlayers={pickedPlayers}
+                  onRandomPick={handleRandomPickTeams}
+                  onConfirm={handleConfirmGame}
+                  onReject={handleRejectPick}
+                  onCustomPick={() => setIsCustomPicking(true)}
+                />
+              )}
+
+              {/* 코트 선택 패널 */}
+              {isSelectingCourt && pickedPlayers && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800 mb-2">배정할 코트를 선택하세요</p>
+                  <div className="flex flex-wrap gap-2">
+                    {courts
+                      .filter((c) => c.playerIds === null)
+                      .map((court) => (
+                        <Button key={court.id} onClick={() => handleAssignCourt(court.id)} size="sm">
+                          {court.name}
+                        </Button>
+                      ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsSelectingCourt(false)}
+                    className="mt-2 w-full text-gray-500"
+                  >
+                    취소
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Section 3.5: Court Manager */}
-      <Card className="mb-3">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg">
-            코트 관리
-            {courts.some((c) => c.playerIds !== null) && (
-              <span className="text-sm text-gray-500 ml-2">
-                (게임중: {courts.filter((c) => c.playerIds !== null).length}개)
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <CourtManager
-            courts={courts}
-            players={players}
-            onAddCourt={handleAddCourt}
-            onRemoveCourt={handleRemoveCourt}
-            onRenameCourt={handleRenameCourt}
-            onEndGame={handleEndCourtGame}
-          />
-        </CardContent>
-      </Card>
+      <Collapsible open={openSections.courtManager} onOpenChange={() => toggleSection('courtManager')}>
+        <Card className="mb-3">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">
+                  코트 관리
+                  {courts.some((c) => c.playerIds !== null) && (
+                    <span className="text-sm text-gray-500 ml-2">
+                      (게임중: {courts.filter((c) => c.playerIds !== null).length}개)
+                    </span>
+                  )}
+                </CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.courtManager ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <CourtManager
+                courts={courts}
+                players={players}
+                onAddCourt={handleAddCourt}
+                onRemoveCourt={handleRemoveCourt}
+                onRenameCourt={handleRenameCourt}
+                onEndGame={handleEndCourtGame}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Section 4: Game History & Stats */}
-      <Card className="mb-3">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg">게임 기록 ({games.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
-        </CardContent>
-      </Card>
+      <Collapsible open={openSections.gameHistory} onOpenChange={() => toggleSection('gameHistory')}>
+        <Card className="mb-3">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">게임 기록 ({games.length})</CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.gameHistory ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Section 5: Reset Actions */}
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base md:text-lg">초기화</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <Button onClick={handleResetPlayerStates} variant="secondary" className="flex-1">
-              선수 상태 초기화
-            </Button>
-            <Button onClick={handleResetGames} variant="outline" className="flex-1">
-              게임 기록 초기화
-            </Button>
-            <Button onClick={handleResetPlayers} variant="destructive" className="flex-1">
-              선수 목록 초기화
-            </Button>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            ⚠️ 선수 상태 초기화: 모든 휴식·필수포함 해제 | 게임/선수 초기화: 되돌릴 수 없음
-          </p>
-        </CardContent>
-      </Card>
+      <Collapsible open={openSections.resetActions} onOpenChange={() => toggleSection('resetActions')}>
+        <Card className="mb-4">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base md:text-lg">초기화</CardTitle>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.resetActions ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Button onClick={handleResetPlayerStates} variant="secondary" className="flex-1">
+                  선수 상태 초기화
+                </Button>
+                <Button onClick={handleResetGames} variant="outline" className="flex-1">
+                  게임 기록 초기화
+                </Button>
+                <Button onClick={handleResetPlayers} variant="destructive" className="flex-1">
+                  선수 목록 초기화
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                ⚠️ 선수 상태 초기화: 모든 휴식·필수포함 해제 | 게임/선수 초기화: 되돌릴 수 없음
+              </p>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Player Edit Modal */}
       <PlayerEditModal

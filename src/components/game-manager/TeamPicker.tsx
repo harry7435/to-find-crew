@@ -49,6 +49,7 @@ interface TeamPickerProps {
   onRandomPick: () => void;
   onConfirm: () => void;
   onReject: () => void;
+  onCustomPick: () => void;
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────
@@ -148,6 +149,7 @@ export default function TeamPicker({
   onRandomPick,
   onConfirm,
   onReject,
+  onCustomPick,
 }: TeamPickerProps) {
   const activePlayers = players.filter((p) => p.status === 'active');
   const canPick = activePlayers.length >= 4;
@@ -165,13 +167,16 @@ export default function TeamPicker({
 
   if (!pickedPlayers) {
     return (
-      <div className="text-center space-y-4">
-        <Button onClick={onRandomPick} disabled={!canPick} size="lg" className="w-full md:w-auto">
+      <div className="flex flex-col items-center gap-3">
+        <Button onClick={onRandomPick} disabled={!canPick} size="lg" className="w-full">
           랜덤 뽑기 🎲
         </Button>
         {!canPick && (
           <p className="text-sm text-gray-500">최소 4명의 활성 선수가 필요합니다 (현재: {activePlayers.length}명)</p>
         )}
+        <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full">
+          직접 선택
+        </Button>
       </div>
     );
   }
@@ -230,18 +235,23 @@ export default function TeamPicker({
           </div>
         </motion.div>
 
-        {/* 확정 / 다시 뽑기 */}
+        {/* 확정 / 다시 뽑기 / 직접 선택 */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="flex gap-3 justify-center"
+          className="flex flex-col gap-2"
         >
-          <Button onClick={onConfirm} size="lg" className="flex-1 md:flex-none">
-            확정
-          </Button>
-          <Button onClick={onReject} variant="outline" size="lg" className="flex-1 md:flex-none">
-            다시 뽑기
+          <div className="flex gap-3">
+            <Button onClick={onConfirm} size="lg" className="flex-1">
+              확정
+            </Button>
+            <Button onClick={onReject} variant="outline" size="lg" className="flex-1">
+              다시 뽑기
+            </Button>
+          </div>
+          <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full">
+            직접 선택
           </Button>
         </motion.div>
       </div>
