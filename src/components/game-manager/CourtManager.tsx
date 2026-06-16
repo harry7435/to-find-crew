@@ -5,7 +5,9 @@ import { Court, Player } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, X, Square, Pencil, Check } from 'lucide-react';
+import { Plus, X, Square, Pencil, Check, Clock, Undo2 } from 'lucide-react';
+import { formatElapsed } from '@/utils/formatElapsed';
+import { useTicker } from '@/hooks/useTicker';
 
 interface CourtManagerProps {
   courts: Court[];
@@ -14,6 +16,7 @@ interface CourtManagerProps {
   onRemoveCourt: (id: string) => void;
   onRenameCourt: (id: string, name: string) => void;
   onEndGame: (id: string) => void;
+  onCancelGame: (id: string) => void;
 }
 
 export default function CourtManager({
@@ -23,7 +26,9 @@ export default function CourtManager({
   onRemoveCourt,
   onRenameCourt,
   onEndGame,
+  onCancelGame,
 }: CourtManagerProps) {
+  const now = useTicker();
   const [isAdding, setIsAdding] = useState(false);
   const [addingName, setAddingName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -126,7 +131,20 @@ export default function CourtManager({
                     <>
                       <span className="font-medium text-sm truncate">{court.name}</span>
                       {isActive ? (
-                        <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">게임중</Badge>
+                        <>
+                          <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
+                            게임중
+                          </Badge>
+                          {court.gameStartedAt && (
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-50 text-blue-700 border-blue-200 text-xs shrink-0"
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              {formatElapsed(court.gameStartedAt, now) ?? '방금'}
+                            </Badge>
+                          )}
+                        </>
                       ) : (
                         <Badge variant="outline" className="text-gray-500 text-xs shrink-0">
                           대기중
@@ -171,14 +189,20 @@ export default function CourtManager({
                       </span>
                     ))}
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => onEndGame(court.id)}
-                    className="w-full mt-2 h-7 text-xs"
-                  >
-                    게임 종료
-                  </Button>
+                  <div className="grid grid-cols-2 gap-1 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onCancelGame(court.id)}
+                      className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    >
+                      <Undo2 className="h-3 w-3 mr-1" />
+                      게임 취소
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => onEndGame(court.id)} className="h-7 text-xs">
+                      게임 종료
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 !isEditing && <p className="text-xs text-gray-400 text-center py-1">비어있음</p>

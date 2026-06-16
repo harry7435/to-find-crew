@@ -7,8 +7,10 @@ export interface Player {
   gender?: 'male' | 'female';
   skillLevel?: 'S' | 'A' | 'B' | 'C' | 'D' | 'E';
   ageGroup?: '10s' | '20s' | '30s' | '40s' | '50s' | '60s+';
-  status: 'active' | 'resting' | 'playing'; // active: 게임 가능, resting: 휴식중, playing: 게임중
-  pinned?: boolean; // true: 무조건 포함, false/undefined: 일반
+  status: 'active' | 'resting' | 'playing' | 'queued';
+  pinned?: boolean;
+  attending?: boolean;
+  waitingSince?: string | null;
 }
 
 export interface GameRecord {
@@ -20,15 +22,23 @@ export interface GameRecord {
 export interface Court {
   id: string;
   name: string;
-  playerIds: [string, string, string, string] | null; // null = 빈 코트
+  playerIds: [string, string, string, string] | null;
   gameStartedAt: string | null;
+  gameId?: string | null;
+  prevWaiting?: Record<string, string | null>;
+}
+
+export interface QueueItem {
+  id: string;
+  playerIds: [string, string, string, string];
+  queuedAt: string;
 }
 
 const PLAYERS_KEY = 'game-manager-players';
 const GAMES_KEY = 'game-manager-games';
 const COURTS_KEY = 'game-manager-courts';
+const QUEUE_KEY = 'game-manager-queue';
 
-// 기존 데이터 형식 (teamA/teamB)
 interface LegacyGameRecord {
   id: string;
   teamA: [string, string];
@@ -42,7 +52,6 @@ function isLegacyGameRecord(game: RawGameRecord): game is LegacyGameRecord {
   return 'teamA' in game && 'teamB' in game && !('players' in game);
 }
 
-// 기존 데이터를 새 형식으로 마이그레이션
 function migrateOldGameRecords(games: RawGameRecord[]): GameRecord[] {
   return games.map((game) => {
     if (isLegacyGameRecord(game)) {
@@ -56,29 +65,49 @@ function migrateOldGameRecords(games: RawGameRecord[]): GameRecord[] {
   });
 }
 
+// 기존 선수 데이터에 attending/waitingSince 누락 시 기본값 보정
+function migratePlayers(players: Player[]): Player[] {
+  const nowIso = new Date().toISOString();
+  return players.map((p) => {
+    const attending = p.attending === undefined ? true : p.attending;
+    let waitingSince = p.waitingSince ?? null;
+    if (p.status === 'active' && !waitingSince) {
+      waitingSince = nowIso;
+    }
+    if (p.status !== 'active') {
+      waitingSince = null;
+    }
+    return { ...p, attending, waitingSince };
+  });
+}
+
 export function useGameManager() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [games, setGames] = useState<GameRecord[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const storedPlayers = localStorage.getItem(PLAYERS_KEY);
       const storedGames = localStorage.getItem(GAMES_KEY);
       const storedCourts = localStorage.getItem(COURTS_KEY);
+      const storedQueue = localStorage.getItem(QUEUE_KEY);
 
       if (storedPlayers) {
-        setPlayers(JSON.parse(storedPlayers));
+        const parsed = JSON.parse(storedPlayers) as Player[];
+        setPlayers(migratePlayers(parsed));
       }
       if (storedGames) {
         const parsed = JSON.parse(storedGames) as RawGameRecord[];
-        const migrated = migrateOldGameRecords(parsed);
-        setGames(migrated);
+        setGames(migrateOldGameRecords(parsed));
       }
       if (storedCourts) {
         setCourts(JSON.parse(storedCourts));
+      }
+      if (storedQueue) {
+        setQueue(JSON.parse(storedQueue));
       }
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
@@ -88,7 +117,6 @@ export function useGameManager() {
     }
   }, []);
 
-  // Save players to localStorage
   useEffect(() => {
     if (!isLoading) {
       try {
@@ -100,7 +128,6 @@ export function useGameManager() {
     }
   }, [players, isLoading]);
 
-  // Save games to localStorage
   useEffect(() => {
     if (!isLoading) {
       try {
@@ -112,7 +139,6 @@ export function useGameManager() {
     }
   }, [games, isLoading]);
 
-  // Save courts to localStorage
   useEffect(() => {
     if (!isLoading) {
       try {
@@ -124,11 +150,24 @@ export function useGameManager() {
     }
   }, [courts, isLoading]);
 
-  const addPlayer = useCallback((playerData: Omit<Player, 'id' | 'status'>) => {
+  useEffect(() => {
+    if (!isLoading) {
+      try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      } catch (error) {
+        console.error('Failed to save queue:', error);
+        toast.error('대기열 저장에 실패했습니다');
+      }
+    }
+  }, [queue, isLoading]);
+
+  const addPlayer = useCallback((playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
     const newPlayer: Player = {
       ...playerData,
       id: crypto.randomUUID(),
-      status: 'active',
+      status: 'resting',
+      attending: false,
+      waitingSince: null,
     };
     setPlayers((prev) => [...prev, newPlayer]);
   }, []);
@@ -139,6 +178,43 @@ export function useGameManager() {
 
   const updatePlayer = useCallback((id: string, updates: Partial<Omit<Player, 'id'>>) => {
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  }, []);
+
+  const setAttending = useCallback((id: string, attending: boolean) => {
+    const nowIso = new Date().toISOString();
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        if (attending) {
+          if (p.status === 'playing' || p.status === 'queued') {
+            return { ...p, attending: true };
+          }
+          return { ...p, attending: true, status: 'active', waitingSince: nowIso };
+        }
+        return { ...p, attending: false, status: 'resting', pinned: false, waitingSince: null };
+      }),
+    );
+  }, []);
+
+  const setAttendingBulk = useCallback((attendingIds: string[]) => {
+    const nowIso = new Date().toISOString();
+    const attendingSet = new Set(attendingIds);
+    setPlayers((prev) =>
+      prev.map((p) => {
+        // 게임중이거나 대기열에 있는 선수는 참석 상태를 변경하지 않는다 (코트/큐 데이터 불일치 방지)
+        if (p.status === 'playing' || p.status === 'queued') {
+          return p;
+        }
+        const shouldAttend = attendingSet.has(p.id);
+        if (shouldAttend === (p.attending === true)) {
+          return p;
+        }
+        if (shouldAttend) {
+          return { ...p, attending: true, status: 'active', waitingSince: nowIso };
+        }
+        return { ...p, attending: false, status: 'resting', pinned: false, waitingSince: null };
+      }),
+    );
   }, []);
 
   const addGame = useCallback((gameData: Omit<GameRecord, 'id' | 'confirmedAt'>) => {
@@ -156,6 +232,11 @@ export function useGameManager() {
 
   const resetPlayers = useCallback(() => {
     setPlayers([]);
+    // 선수를 모두 지우면 큐/코트 배정이 삭제된 선수 id를 참조하므로 함께 정리
+    setQueue([]);
+    setCourts((prev) =>
+      prev.map((c) => ({ ...c, playerIds: null, gameStartedAt: null, gameId: null, prevWaiting: undefined })),
+    );
   }, []);
 
   const resetGames = useCallback(() => {
@@ -168,6 +249,7 @@ export function useGameManager() {
       name,
       playerIds: null,
       gameStartedAt: null,
+      gameId: null,
     };
     setCourts((prev) => [...prev, newCourt]);
   }, []);
@@ -180,37 +262,119 @@ export function useGameManager() {
     setCourts((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
   }, []);
 
-  const assignCourtGame = useCallback((courtId: string, playerIds: [string, string, string, string]) => {
-    setCourts((prev) =>
-      prev.map((c) => (c.id === courtId ? { ...c, playerIds, gameStartedAt: new Date().toISOString() } : c)),
+  const enqueueGame = useCallback((playerIds: [string, string, string, string]) => {
+    const newItem: QueueItem = {
+      id: crypto.randomUUID(),
+      playerIds,
+      queuedAt: new Date().toISOString(),
+    };
+    setQueue((prev) => [...prev, newItem]);
+    setPlayers((prev) =>
+      prev.map((p) =>
+        playerIds.includes(p.id) ? { ...p, status: 'queued' as const, pinned: false, waitingSince: null } : p,
+      ),
     );
-    setPlayers((prev) => prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'playing' as const } : p)));
   }, []);
 
-  const endCourtGame = useCallback((courtId: string) => {
-    setCourts((prev) => {
-      const court = prev.find((c) => c.id === courtId);
-      if (court?.playerIds) {
-        const playerIds = court.playerIds;
-        setPlayers((prevPlayers) =>
-          prevPlayers.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const } : p)),
-        );
-      }
-      return prev.map((c) => (c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null } : c));
-    });
-  }, []);
+  const removeFromQueue = useCallback(
+    (queueItemId: string) => {
+      const item = queue.find((q) => q.id === queueItemId);
+      if (!item) return;
+      const playerIds = item.playerIds;
+      const nowIso = new Date().toISOString();
+      setQueue((prev) => prev.filter((q) => q.id !== queueItemId));
+      setPlayers((prev) =>
+        prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: nowIso } : p)),
+      );
+    },
+    [queue],
+  );
+
+  const assignQueueToCourt = useCallback(
+    (queueItemId: string, courtId: string) => {
+      const item = queue.find((q) => q.id === queueItemId);
+      if (!item) return;
+      const playerIds = item.playerIds;
+      const nowIso = new Date().toISOString();
+      const gameId = crypto.randomUUID();
+
+      const prevWaiting: Record<string, string | null> = {};
+      players.forEach((p) => {
+        if (playerIds.includes(p.id)) {
+          prevWaiting[p.id] = p.waitingSince ?? null;
+        }
+      });
+
+      setQueue((prev) => prev.filter((q) => q.id !== queueItemId));
+      setCourts((prev) =>
+        prev.map((c) => (c.id === courtId ? { ...c, playerIds, gameStartedAt: nowIso, gameId, prevWaiting } : c)),
+      );
+      setPlayers((prev) =>
+        prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'playing' as const, waitingSince: null } : p)),
+      );
+      setGames((prev) => [...prev, { id: gameId, players: playerIds, confirmedAt: nowIso }]);
+    },
+    [queue, players],
+  );
+
+  const endCourtGame = useCallback(
+    (courtId: string) => {
+      const court = courts.find((c) => c.id === courtId);
+      if (!court?.playerIds) return;
+      const playerIds = court.playerIds;
+      const nowIso = new Date().toISOString();
+      setCourts((prev) =>
+        prev.map((c) =>
+          c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null, gameId: null, prevWaiting: undefined } : c,
+        ),
+      );
+      setPlayers((prev) =>
+        prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: nowIso } : p)),
+      );
+    },
+    [courts],
+  );
+
+  const cancelCourtGame = useCallback(
+    (courtId: string) => {
+      const court = courts.find((c) => c.id === courtId);
+      if (!court?.playerIds || !court.gameId) return;
+      const playerIds = court.playerIds;
+      const gameId = court.gameId;
+      const prevWaiting = court.prevWaiting ?? {};
+      setGames((prev) => prev.filter((g) => g.id !== gameId));
+      setCourts((prev) =>
+        prev.map((c) =>
+          c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null, gameId: null, prevWaiting: undefined } : c,
+        ),
+      );
+      setPlayers((prev) =>
+        prev.map((p) =>
+          playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: prevWaiting[p.id] ?? null } : p,
+        ),
+      );
+    },
+    [courts],
+  );
 
   const resetCourts = useCallback(() => {
     setCourts([]);
+  }, []);
+
+  const resetQueue = useCallback(() => {
+    setQueue([]);
   }, []);
 
   return {
     players,
     games,
     courts,
+    queue,
     addPlayer,
     removePlayer,
     updatePlayer,
+    setAttending,
+    setAttendingBulk,
     addGame,
     removeGame,
     resetPlayers,
@@ -218,9 +382,13 @@ export function useGameManager() {
     addCourt,
     removeCourt,
     renameCourt,
-    assignCourtGame,
+    enqueueGame,
+    removeFromQueue,
+    assignQueueToCourt,
     endCourtGame,
+    cancelCourtGame,
     resetCourts,
+    resetQueue,
     isLoading,
   };
 }

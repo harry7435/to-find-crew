@@ -5,7 +5,9 @@ import { Player } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Star, Check } from 'lucide-react';
+import { Star, Check, Clock } from 'lucide-react';
+import { formatElapsed } from '@/utils/formatElapsed';
+import { useTicker } from '@/hooks/useTicker';
 
 interface CustomTeamPickerProps {
   players: Player[];
@@ -38,7 +40,13 @@ function getGenderIcon(gender?: 'male' | 'female'): string {
 }
 
 export default function CustomTeamPicker({ players, onConfirm, onCancel }: CustomTeamPickerProps) {
-  const activePlayers = players.filter((p) => p.status === 'active');
+  const now = useTicker();
+  const activePlayers = [...players.filter((p) => p.status === 'active')].sort((a, b) => {
+    const aT = a.waitingSince ? new Date(a.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+    const bT = b.waitingSince ? new Date(b.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+    if (aT !== bT) return aT - bT; // 오래 기다린 순
+    return a.name.localeCompare(b.name, 'ko');
+  });
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
 
   const handleTogglePlayer = (player: Player) => {
@@ -74,9 +82,10 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {selectedPlayers.map((player) => {
                 const isPinned = player.pinned === true;
+                const waitingLabel = formatElapsed(player.waitingSince, now);
                 return (
                   <div key={player.id} className="flex items-center justify-between p-2 bg-white rounded">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-lg">{getGenderIcon(player.gender)}</span>
                       <span className="font-medium">{player.name}</span>
                       {isPinned && (
@@ -87,6 +96,12 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
                       )}
                       {player.skillLevel && (
                         <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                      )}
+                      {waitingLabel && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {waitingLabel}
+                        </Badge>
                       )}
                     </div>
                     <Button
@@ -119,6 +134,7 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
                 const isSelected = selectedPlayers.find((p) => p.id === player.id);
                 const isPinned = player.pinned === true;
                 const canSelect = selectedPlayers.length < 4 || isSelected;
+                const waitingLabel = formatElapsed(player.waitingSince, now);
 
                 return (
                   <button
@@ -133,7 +149,7 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
                           : 'opacity-50 cursor-not-allowed'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-lg">{getGenderIcon(player.gender)}</span>
                       <span className="font-medium">{player.name}</span>
                       {isPinned && (
@@ -144,6 +160,12 @@ export default function CustomTeamPicker({ players, onConfirm, onCancel }: Custo
                       )}
                       {player.skillLevel && (
                         <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                      )}
+                      {waitingLabel && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {waitingLabel}
+                        </Badge>
                       )}
                     </div>
                     {isSelected && <Check className="h-4 w-4 text-blue-600" />}
