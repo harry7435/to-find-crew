@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
-import { LogOut, User } from 'lucide-react';
+import { Calendar, LogOut, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Header() {
@@ -50,7 +50,7 @@ export default function Header() {
           {user ? (
             <>
               {/* 배드민턴 퀵 액세스 */}
-              {/* <div className="hidden md:flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
                 <Link href="/badminton/create">
                   <Button variant="outline" size="sm">
                     번개 모임 만들기
@@ -61,7 +61,7 @@ export default function Header() {
                     번개 모임 참가
                   </Button>
                 </Link>
-              </div> */}
+              </div>
 
               {/* 사용자 메뉴 */}
               <DropdownMenu>
@@ -92,7 +92,7 @@ export default function Header() {
                   <DropdownMenuSeparator />
 
                   {/* 모바일에서만 보이는 배드민턴 메뉴 */}
-                  {/* <div className="md:hidden">
+                  <div className="md:hidden">
                     <Link href="/badminton/create">
                       <DropdownMenuItem>번개 모임 만들기</DropdownMenuItem>
                     </Link>
@@ -100,13 +100,13 @@ export default function Header() {
                       <DropdownMenuItem>번개 모임 참가</DropdownMenuItem>
                     </Link>
                     <DropdownMenuSeparator />
-                  </div> */}
-                  {/* <DropdownMenuItem asChild className="cursor-pointer">
+                  </div>
+                  <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/badminton/my-sessions">
                       <Calendar className="mr-2 h-4 w-4" />
                       <span>내 모임</span>
                     </Link>
-                  </DropdownMenuItem> */}
+                  </DropdownMenuItem>
 
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/profile">

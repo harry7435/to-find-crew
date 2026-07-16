@@ -27,7 +27,7 @@ export default function Home() {
         {/* Badminton Section */}
         <section className="container mx-auto p-4">
           <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
-            {/* <Card className="text-center">
+            <Card className="text-center w-full min-w-64 max-w-xs">
               <CardHeader>
                 <CardTitle className="text-xl">번개 생성</CardTitle>
                 <CardDescription>번개를 만들어 관리해요</CardDescription>
@@ -39,7 +39,7 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <Card className="text-center">
+            <Card className="text-center w-full min-w-64 max-w-xs">
               <CardHeader>
                 <CardTitle className="text-xl">번개 참가</CardTitle>
                 <CardDescription>코드를 입력해서 번개에 참여해요</CardDescription>
@@ -51,7 +51,7 @@ export default function Home() {
                   </Button>
                 </Link>
               </CardContent>
-            </Card> */}
+            </Card>
 
             <Card className="text-center w-full min-w-64 max-w-xs">
               <CardHeader>
