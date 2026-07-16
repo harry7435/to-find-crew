@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ParticipantsList from '@/components/badminton/ParticipantsList';
+import OrganizerBoard from '@/components/badminton/OrganizerBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -68,6 +69,27 @@ export default function SessionDetailPage() {
     fetchSession();
     checkUserProfile();
   }, [fetchSession, checkUserProfile]);
+
+  // 참가자 목록 실시간 반영 (다른 브라우저에서 참가/게스트 등록/퇴장 시 자동 새로고침)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`session-participants-${sessionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guest_participants', filter: `session_id=eq.${sessionId}` },
+        () => fetchSession(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'session_participants', filter: `session_id=eq.${sessionId}` },
+        () => fetchSession(),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId, fetchSession]);
 
   // 사용자 정보 업데이트 함수
   const handleUserInfoSubmit = async (data: { gender: string; age_group: string; skill_level: string }) => {
@@ -323,6 +345,18 @@ export default function SessionDetailPage() {
           sessionId={session.id}
           onParticipantRemoved={fetchSession}
         />
+
+        {/* 게임 관리 (모임장 전용) */}
+        {user?.id === session.creator_id && (
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold mb-3">게임 관리</h2>
+            {session.status === 'completed' ? (
+              <p className="text-sm text-gray-500">종료된 모임입니다. 게임 관리 기능은 사용할 수 없습니다.</p>
+            ) : (
+              <OrganizerBoard sessionId={session.id} />
+            )}
+          </div>
+        )}
 
         {/* 팀 정보 (있는 경우) */}
         {session.teams && session.teams.length > 0 && (

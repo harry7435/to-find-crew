@@ -429,3 +429,102 @@ $$ language 'plpgsql';
 -- Triggers for meeting participant count
 CREATE TRIGGER update_meeting_participant_count_insert AFTER INSERT ON meeting_participants FOR EACH ROW EXECUTE FUNCTION update_meeting_participant_count();
 CREATE TRIGGER update_meeting_participant_count_delete AFTER DELETE ON meeting_participants FOR EACH ROW EXECUTE FUNCTION update_meeting_participant_count();
+
+-- ============================================================
+-- Board persistence tables (배드민턴 보드 서버 영속화, additive only)
+-- ============================================================
+
+CREATE TABLE board_player_state (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  session_participant_id UUID REFERENCES session_participants(id) ON DELETE CASCADE,
+  guest_participant_id UUID REFERENCES guest_participants(id) ON DELETE CASCADE,
+  attending BOOLEAN NOT NULL DEFAULT false,
+  player_status TEXT NOT NULL DEFAULT 'resting'
+    CHECK (player_status IN ('active', 'resting', 'playing', 'queued')),
+  pinned BOOLEAN NOT NULL DEFAULT false,
+  waiting_since TIMESTAMP WITH TIME ZONE,
+  CHECK (num_nonnulls(session_participant_id, guest_participant_id) = 1),
+  UNIQUE (session_participant_id),
+  UNIQUE (guest_participant_id)
+);
+
+CREATE TABLE courts (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE board_games (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  court_id UUID REFERENCES courts(id) ON DELETE SET NULL,
+  player_ids UUID[4] NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'playing', 'completed')),
+  queued_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  started_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_board_player_state_session_id ON board_player_state(session_id);
+CREATE INDEX idx_courts_session_id ON courts(session_id);
+CREATE INDEX idx_board_games_session_id ON board_games(session_id);
+CREATE INDEX idx_board_games_court_id ON board_games(court_id);
+
+ALTER TABLE board_player_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE board_games ENABLE ROW LEVEL SECURITY;
+
+-- board_player_state: 누구나 읽기, 누구나 자기 상태 행 생성(추후 셀프 등록/셀프 토글 대비),
+-- 수정/삭제는 세션 생성자만
+CREATE POLICY "Anyone can read board player state" ON board_player_state FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert board player state" ON board_player_state FOR INSERT WITH CHECK (true);
+CREATE POLICY "Session creators can update board player state" ON board_player_state FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = board_player_state.session_id
+    AND bs.creator_id::text = auth.uid()::text
+  )
+);
+CREATE POLICY "Session creators can delete board player state" ON board_player_state FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = board_player_state.session_id
+    AND bs.creator_id::text = auth.uid()::text
+  )
+);
+
+-- courts: 누구나 읽기, 세션 생성자만 쓰기
+CREATE POLICY "Anyone can read courts" ON courts FOR SELECT USING (true);
+CREATE POLICY "Session creators can manage courts" ON courts FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = courts.session_id
+    AND bs.creator_id::text = auth.uid()::text
+  )
+);
+
+-- board_games: 누구나 읽기, 세션 생성자만 쓰기
+CREATE POLICY "Anyone can read board games" ON board_games FOR SELECT USING (true);
+CREATE POLICY "Session creators can manage board games" ON board_games FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = board_games.session_id
+    AND bs.creator_id::text = auth.uid()::text
+  )
+);
+
+-- Realtime 활성화 (기본적으로 CREATE TABLE만으로는 postgres_changes가 브로드캐스트되지 않음)
+ALTER PUBLICATION supabase_realtime ADD TABLE
+  board_player_state, courts, board_games, guest_participants, session_participants;
+
+-- DELETE 이벤트에도 session_id 등 전체 row가 실리도록 설정
+-- (기본 REPLICA IDENTITY는 primary key만 old record에 포함시켜, session_id 필터가
+--  DELETE 이벤트를 매칭하지 못해 실시간 반영이 안 되는 문제가 있었음)
+ALTER TABLE board_player_state REPLICA IDENTITY FULL;
+ALTER TABLE courts REPLICA IDENTITY FULL;
+ALTER TABLE board_games REPLICA IDENTITY FULL;
+ALTER TABLE guest_participants REPLICA IDENTITY FULL;
+ALTER TABLE session_participants REPLICA IDENTITY FULL;
