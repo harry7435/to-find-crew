@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -37,8 +38,13 @@ export default function AuthCallbackPage() {
             console.error('User upsert error:', upsertError);
           }
 
-          // 성공적으로 로그인됨 - 홈으로 리디렉트
-          router.push('/');
+          // 성공적으로 로그인됨 - game-manager 마이그레이션 대기 중이면 그쪽으로, 아니면 홈으로
+          const hasPendingMigration = localStorage.getItem(MIGRATION_PENDING_FLAG) === 'true';
+          if (hasPendingMigration) {
+            router.push('/game-manager');
+          } else {
+            router.push('/');
+          }
         } else {
           // 세션이 없음 - 로그인 페이지로 리디렉트
           router.push('/auth/login');

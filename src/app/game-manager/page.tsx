@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,9 @@ import GameHistory from '@/components/game-manager/GameHistory';
 import CourtManager from '@/components/game-manager/CourtManager';
 import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
+import MigrateBanner from '@/components/game-manager/MigrateBanner';
+import MigrateModal from '@/components/game-manager/MigrateModal';
+import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
 
 export default function GameManagerPage() {
   const router = useRouter();
@@ -58,6 +61,15 @@ export default function GameManagerPage() {
     gameHistory: false,
     resetActions: false,
   });
+  const [isMigrateModalOpen, setIsMigrateModalOpen] = useState(false);
+
+  // 로그인 콜백에서 돌아왔는데 플래그가 아직 남아있는 예외 상황 대비
+  useEffect(() => {
+    if (localStorage.getItem(MIGRATION_PENDING_FLAG) === 'true') {
+      localStorage.removeItem(MIGRATION_PENDING_FLAG);
+      setIsMigrateModalOpen(true);
+    }
+  }, []);
 
   const toggleSection = useCallback((key: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -396,6 +408,8 @@ export default function GameManagerPage() {
         <div className="w-11" />
       </div>
 
+      <MigrateBanner hasPlayers={players.length > 0} onOpenModal={() => setIsMigrateModalOpen(true)} />
+
       {/* Section 1: Player Registration */}
       <Collapsible open={openSections.registration} onOpenChange={() => toggleSection('registration')}>
         <Card className="mb-3">
@@ -637,6 +651,8 @@ export default function GameManagerPage() {
         players={players}
         onConfirm={handleBulkAttending}
       />
+
+      <MigrateModal isOpen={isMigrateModalOpen} onClose={() => setIsMigrateModalOpen(false)} players={players} />
     </div>
   );
 }
