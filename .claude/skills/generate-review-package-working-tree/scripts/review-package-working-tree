@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Build a task reviewer's diff package from the WORKING TREE (not commits),
+# for repos where superpowers:subagent-driven-development is used but
+# `git add`/`git commit` is forbidden. Companion to that skill's own
+# `scripts/review-package`, which requires a commit range and doesn't apply
+# here. See ../SKILL.md for when to use this instead.
+#
+# Usage: review-package-working-tree PLAN_FILE TASK_NUMBER [OUTFILE]
+# Default OUTFILE: <repo-root>/.superpowers/sdd/review-task-<N>-working-tree.diff
+set -euo pipefail
+
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+  echo "usage: review-package-working-tree PLAN_FILE TASK_NUMBER [OUTFILE]" >&2
+  exit 2
+fi
+
+plan=$1
+n=$2
+[ -f "$plan" ] || { echo "no such plan file: $plan" >&2; exit 2; }
+
+repo_root=$(git rev-parse --show-toplevel)
+
+if [ $# -eq 3 ]; then
+  out=$3
+else
+  dir="$repo_root/.superpowers/sdd"
+  mkdir -p "$dir"
+  out="$dir/review-task-${n}-working-tree.diff"
+fi
+
+# Extract just Task N's section (mirrors superpowers task-brief's fence-aware logic)
+task_text=$(awk -v n="$n" '
+  /^```/ { infence = !infence }
+  !infence && /^#+[ \t]+Task[ \t]+[0-9]+/ {
+    intask = ($0 ~ ("^#+[ \t]+Task[ \t]+" n "([^0-9]|$)"))
+  }
+  intask { print }
+' "$plan")
+
+if [ -z "$task_text" ]; then
+  echo "task ${n} not found in ${plan} (no heading matching 'Task ${n}')" >&2
+  exit 3
+fi
+
+task_title=$(echo "$task_text" | head -1 | sed -E 's/^#+[ \t]*//')
+
+# Files this task lists under **Files:** as "- Create: `path`" / "- Modify: `path`"
+# (avoid `mapfile`/`readarray` — not present in macOS's stock bash 3.2)
+files=()
+while IFS= read -r line; do
+  [ -n "$line" ] && files+=("$line")
+done < <(echo "$task_text" | grep -oE '^- (Create|Modify): `[^`]+`' | sed -E 's/^- (Create|Modify): `([^`]+)`/\2/')
+
+if [ ${#files[@]} -eq 0 ]; then
+  echo "no '- Create:'/'- Modify:' file entries found under Task ${n}'s **Files:** block" >&2
+  exit 3
+fi
+
+cd "$repo_root"
+
+{
+  echo "# Review package (working tree, no commits): ${task_title}"
+  echo
+  echo "## Files"
+  git status --short -- "${files[@]}" || true
+  echo
+  for f in "${files[@]}"; do
+    echo "## ${f}"
+    echo
+    status_line=$(git status --short -- "$f" | head -1)
+    if [[ "$status_line" == \?\?* ]]; then
+      # Fully untracked (never `git add`-ed) — nothing for `git diff HEAD` to
+      # compare against, so embed the whole file instead.
+      echo "New file (untracked) — full content:"
+      echo
+      echo '```'
+      cat "$f" 2>/dev/null || echo "(file not found: $f)"
+      echo '```'
+    else
+      # Tracked (whether staged, unstaged, or both) — `git diff HEAD` shows
+      # the complete working-tree-vs-HEAD delta regardless of index state,
+      # so it doesn't matter whether the user has since run `git add`.
+      echo '```diff'
+      git diff HEAD -U10 -- "$f"
+      echo '```'
+    fi
+    echo
+  done
+} > "$out"
+
+echo "wrote ${out}: ${#files[@]} file(s), $(wc -c < "$out" | tr -d ' ') bytes"
