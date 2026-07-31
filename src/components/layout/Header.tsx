@@ -21,6 +21,11 @@ export default function Header() {
     try {
       await signOut();
       toast.success('로그아웃되었습니다');
+      // AuthGuard로 보호된 페이지(내 모임 등)에서 로그아웃하면, signOut으로 user가
+      // null이 되는 순간 그 페이지의 AuthGuard가 자체적으로 /auth/login으로
+      // 리다이렉트를 걸어 클라이언트 라우터 이동과 경쟁한다. 하드 네비게이션으로
+      // 페이지를 통째로 새로고침해 그 경쟁 자체를 없앤다.
+      window.location.href = '/';
     } catch {
       toast.error('로그아웃에 실패했습니다');
     }
@@ -40,7 +45,7 @@ export default function Header() {
   }
 
   return (
-    <header className="border-b fixed bg-white top-0 w-full">
+    <header className="border-b fixed bg-white top-0 w-full z-10">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/" className="text-xl font-bold">
           🏸 To Find Crew
@@ -49,20 +54,6 @@ export default function Header() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              {/* 배드민턴 퀵 액세스 */}
-              <div className="hidden md:flex items-center gap-2">
-                <Link href="/badminton/create">
-                  <Button variant="outline" size="sm">
-                    번개 모임 만들기
-                  </Button>
-                </Link>
-                <Link href="/badminton/join">
-                  <Button variant="outline" size="sm">
-                    번개 모임 참가
-                  </Button>
-                </Link>
-              </div>
-
               {/* 사용자 메뉴 */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -91,16 +82,6 @@ export default function Header() {
                   </div>
                   <DropdownMenuSeparator />
 
-                  {/* 모바일에서만 보이는 배드민턴 메뉴 */}
-                  <div className="md:hidden">
-                    <Link href="/badminton/create">
-                      <DropdownMenuItem>번개 모임 만들기</DropdownMenuItem>
-                    </Link>
-                    <Link href="/badminton/join">
-                      <DropdownMenuItem>번개 모임 참가</DropdownMenuItem>
-                    </Link>
-                    <DropdownMenuSeparator />
-                  </div>
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/badminton/my-sessions">
                       <Calendar className="mr-2 h-4 w-4" />
