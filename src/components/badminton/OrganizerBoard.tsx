@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useGameManager, Player } from '@/hooks/useGameManager';
+import { useBoardRealtime } from '@/hooks/useBoardRealtime';
+import { Player } from '@/hooks/useGameManager';
 import PlayerForm from '@/components/game-manager/PlayerForm';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
@@ -18,12 +18,12 @@ import GameHistory from '@/components/game-manager/GameHistory';
 import CourtManager from '@/components/game-manager/CourtManager';
 import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
-import MigrateBanner from '@/components/game-manager/MigrateBanner';
-import MigrateModal from '@/components/game-manager/MigrateModal';
-import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
 
-export default function GameManagerPage() {
-  const router = useRouter();
+interface OrganizerBoardProps {
+  sessionId: string;
+}
+
+export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
   const {
     players,
     games,
@@ -46,7 +46,8 @@ export default function GameManagerPage() {
     endCourtGame,
     cancelCourtGame,
     isLoading,
-  } = useGameManager();
+  } = useBoardRealtime(sessionId);
+
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
@@ -61,15 +62,6 @@ export default function GameManagerPage() {
     gameHistory: false,
     resetActions: false,
   });
-  const [isMigrateModalOpen, setIsMigrateModalOpen] = useState(false);
-
-  // 로그인 콜백에서 돌아왔는데 플래그가 아직 남아있는 예외 상황 대비
-  useEffect(() => {
-    if (localStorage.getItem(MIGRATION_PENDING_FLAG) === 'true') {
-      localStorage.removeItem(MIGRATION_PENDING_FLAG);
-      setIsMigrateModalOpen(true);
-    }
-  }, []);
 
   const toggleSection = useCallback((key: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -99,11 +91,8 @@ export default function GameManagerPage() {
       if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
         removePlayer(id);
         toast.success('선수가 삭제되었습니다');
-        if (pickedPlayers) {
-          const allPickedIds = pickedPlayers.map((p) => p.id);
-          if (allPickedIds.includes(id)) {
-            setPickedPlayers(null);
-          }
+        if (pickedPlayers?.some((p) => p.id === id)) {
+          setPickedPlayers(null);
         }
       }
     },
@@ -116,25 +105,19 @@ export default function GameManagerPage() {
       toast.error('최소 4명의 활성 선수가 필요합니다');
       return;
     }
-
     try {
-      const selectedPlayers = randomTeamPicker(players);
-      setPickedPlayers(selectedPlayers);
+      setPickedPlayers(randomTeamPicker(players));
     } catch (error) {
-      console.error('Player picking error:', error);
       toast.error(error instanceof Error ? error.message : '선수를 뽑는데 실패했습니다');
     }
   }, [players]);
 
   const handleConfirmGame = useCallback(() => {
     if (!pickedPlayers) return;
-
     const playerIds = pickedPlayers.map((p) => p.id) as [string, string, string, string];
     enqueueGame(playerIds);
-
-    const playerNames = pickedPlayers.map((p) => p.name).join(', ');
     toast.success('대기열에 추가되었습니다', {
-      description: `선수: ${playerNames}`,
+      description: `선수: ${pickedPlayers.map((p) => p.name).join(', ')}`,
       duration: 4000,
     });
     setPickedPlayers(null);
@@ -158,20 +141,6 @@ export default function GameManagerPage() {
       }
     },
     [removeFromQueue],
-  );
-
-  const handleAddCourt = useCallback(
-    (name: string) => {
-      addCourt(name);
-    },
-    [addCourt],
-  );
-
-  const handleRenameCourt = useCallback(
-    (id: string, name: string) => {
-      renameCourt(id, name);
-    },
-    [renameCourt],
   );
 
   const handleRemoveCourt = useCallback(
@@ -202,7 +171,7 @@ export default function GameManagerPage() {
     (id: string) => {
       const court = courts.find((c) => c.id === id);
       if (!court?.playerIds) return;
-      if (confirm(`${court.name} 게임을 취소하시겠습니까?\n(게임 기록이 남지 않고 선수 대기시간이 유지됩니다)`)) {
+      if (confirm(`${court.name} 게임을 취소하시겠습니까?\n(게임 기록이 남지 않습니다)`)) {
         cancelCourtGame(id);
         toast.success(`${court.name} 게임이 취소되었습니다`);
       }
@@ -210,23 +179,16 @@ export default function GameManagerPage() {
     [courts, cancelCourtGame],
   );
 
-  const handleRejectPick = useCallback(() => {
-    handleRandomPickTeams();
-  }, [handleRandomPickTeams]);
-
-  const handleCustomConfirm = useCallback((players: [Player, Player, Player, Player]) => {
-    setPickedPlayers(players);
+  const handleCustomConfirm = useCallback((selected: [Player, Player, Player, Player]) => {
+    setPickedPlayers(selected);
     setIsCustomPicking(false);
   }, []);
 
-  const handleEditPlayer = useCallback((player: Player) => {
-    setEditingPlayer(player);
-  }, []);
+  const handleEditPlayer = useCallback((player: Player) => setEditingPlayer(player), []);
 
   const handleUpdatePlayer = useCallback(
     (id: string, updates: Partial<Omit<Player, 'id'>>) => {
       updatePlayer(id, updates);
-      toast.success('선수 정보가 수정되었습니다');
     },
     [updatePlayer],
   );
@@ -235,17 +197,10 @@ export default function GameManagerPage() {
     (id: string) => {
       const player = players.find((p) => p.id === id);
       if (!player) return;
-
-      const newStatus = player.status === 'active' ? 'resting' : 'active';
-      if (newStatus === 'resting') {
+      if (player.status === 'active') {
         updatePlayer(id, { status: 'resting', pinned: false, waitingSince: null });
         toast.success(`${player.name} 선수가 휴식 상태로 변경되었습니다`);
-        if (pickedPlayers) {
-          const allPickedIds = pickedPlayers.map((p) => p.id);
-          if (allPickedIds.includes(id)) {
-            setPickedPlayers(null);
-          }
-        }
+        if (pickedPlayers?.some((p) => p.id === id)) setPickedPlayers(null);
       } else {
         updatePlayer(id, { status: 'active', waitingSince: new Date().toISOString() });
         toast.success(`${player.name} 선수가 활성 상태로 변경되었습니다`);
@@ -258,24 +213,12 @@ export default function GameManagerPage() {
     (id: string) => {
       const player = players.find((p) => p.id === id);
       if (!player) return;
-
       if (player.status === 'resting') {
         toast.error('휴식중인 선수는 필수 포함할 수 없습니다');
         return;
       }
-
-      const newPinned = !player.pinned;
-      updatePlayer(id, { pinned: newPinned });
-
-      if (newPinned) {
-        toast.success(`${player.name} 선수가 필수 포함되었습니다`);
-      } else {
-        toast.success(`${player.name} 선수의 필수 포함이 해제되었습니다`);
-      }
-
-      if (pickedPlayers) {
-        setPickedPlayers(null);
-      }
+      updatePlayer(id, { pinned: !player.pinned });
+      if (pickedPlayers) setPickedPlayers(null);
     },
     [players, updatePlayer, pickedPlayers],
   );
@@ -289,9 +232,7 @@ export default function GameManagerPage() {
         return;
       }
       setAttending(id, !player.attending);
-      if (pickedPlayers?.some((p) => p.id === id)) {
-        setPickedPlayers(null);
-      }
+      if (pickedPlayers?.some((p) => p.id === id)) setPickedPlayers(null);
     },
     [players, setAttending, pickedPlayers],
   );
@@ -331,43 +272,12 @@ export default function GameManagerPage() {
       toast.error('삭제할 선수가 없습니다');
       return;
     }
-    if (confirm('모든 선수 정보를 삭제하시겠습니까?\n(게임 기록도 함께 삭제됩니다)')) {
+    if (confirm('게스트로 등록된 선수 전원을 삭제하시겠습니까?\n(로그인 참가자는 유지됩니다)')) {
       resetPlayers();
-      resetGames();
       setPickedPlayers(null);
-      toast.success('선수 목록이 초기화되었습니다');
+      toast.success('게스트 선수 목록이 초기화되었습니다');
     }
-  }, [players.length, resetPlayers, resetGames]);
-
-  const handleResetPlayerStates = useCallback(() => {
-    if (players.length === 0) {
-      toast.error('선수가 없습니다');
-      return;
-    }
-
-    const hasRestingPlayers = players.some((p) => p.status === 'resting' && p.attending);
-    const hasPinnedPlayers = players.some((p) => p.pinned === true);
-
-    if (!hasRestingPlayers && !hasPinnedPlayers) {
-      toast.error('휴식중이거나 필수 포함된 선수가 없습니다');
-      return;
-    }
-
-    if (confirm('모든 참석 선수의 휴식 상태와 필수 포함을 해제하시겠습니까?')) {
-      const nowIso = new Date().toISOString();
-      players.forEach((player) => {
-        if (player.attending && (player.status === 'resting' || player.pinned === true)) {
-          updatePlayer(player.id, {
-            status: player.status === 'resting' ? 'active' : player.status,
-            pinned: false,
-            waitingSince: player.status === 'resting' ? nowIso : player.waitingSince,
-          });
-        }
-      });
-      setPickedPlayers(null);
-      toast.success('선수 상태가 초기화되었습니다');
-    }
-  }, [players, updatePlayer]);
+  }, [players.length, resetPlayers]);
 
   const handleResetAttendance = useCallback(() => {
     if (!players.some((p) => p.attending)) {
@@ -383,11 +293,9 @@ export default function GameManagerPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-gray-600">데이터를 불러오는 중...</p>
-        </div>
+      <div className="py-8 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+        <p className="mt-2 text-gray-600">보드 데이터를 불러오는 중...</p>
       </div>
     );
   }
@@ -398,21 +306,9 @@ export default function GameManagerPage() {
   const queuedCount = players.filter((p) => p.status === 'queued').length;
 
   return (
-    <div className="container mx-auto px-3 py-4 max-w-4xl">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-        </Button>
-        <h1 className="text-xl md:text-2xl font-bold">번개 게임 관리</h1>
-        <div className="w-11" />
-      </div>
-
-      <MigrateBanner hasPlayers={players.length > 0} onOpenModal={() => setIsMigrateModalOpen(true)} />
-
-      {/* Section 1: Player Registration */}
+    <div className="space-y-3">
       <Collapsible open={openSections.registration} onOpenChange={() => toggleSection('registration')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -431,9 +327,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 2: Player List */}
       <Collapsible open={openSections.playerList} onOpenChange={() => toggleSection('playerList')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -472,9 +367,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 3: Team Picker */}
       <Collapsible open={openSections.teamPicker} onOpenChange={() => toggleSection('teamPicker')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -503,7 +397,7 @@ export default function GameManagerPage() {
                   pickedPlayers={pickedPlayers}
                   onRandomPick={handleRandomPickTeams}
                   onConfirm={handleConfirmGame}
-                  onReject={handleRejectPick}
+                  onReject={handleRandomPickTeams}
                   onCustomPick={() => setIsCustomPicking(true)}
                 />
               )}
@@ -512,9 +406,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 3.5: Game Queue */}
       <Collapsible open={openSections.queue} onOpenChange={() => toggleSection('queue')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -542,9 +435,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 4: Court Manager */}
       <Collapsible open={openSections.courtManager} onOpenChange={() => toggleSection('courtManager')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -567,9 +459,9 @@ export default function GameManagerPage() {
               <CourtManager
                 courts={courts}
                 players={players}
-                onAddCourt={handleAddCourt}
+                onAddCourt={addCourt}
                 onRemoveCourt={handleRemoveCourt}
-                onRenameCourt={handleRenameCourt}
+                onRenameCourt={renameCourt}
                 onEndGame={handleEndCourtGame}
                 onCancelGame={handleCancelCourtGame}
               />
@@ -578,9 +470,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 5: Game History & Stats */}
       <Collapsible open={openSections.gameHistory} onOpenChange={() => toggleSection('gameHistory')}>
-        <Card className="mb-3">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -599,9 +490,8 @@ export default function GameManagerPage() {
         </Card>
       </Collapsible>
 
-      {/* Section 6: Reset Actions */}
       <Collapsible open={openSections.resetActions} onOpenChange={() => toggleSection('resetActions')}>
-        <Card className="mb-4">
+        <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
               <div className="flex items-center justify-between">
@@ -614,10 +504,7 @@ export default function GameManagerPage() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Button onClick={handleResetPlayerStates} variant="secondary" size="sm">
-                  상태 초기화
-                </Button>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 <Button onClick={handleResetAttendance} variant="secondary" size="sm">
                   참석 전체 해제
                 </Button>
@@ -625,18 +512,14 @@ export default function GameManagerPage() {
                   게임 기록 초기화
                 </Button>
                 <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                  선수 목록 초기화
+                  게스트 선수 초기화
                 </Button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                ⚠️ 상태 초기화: 휴식·필수포함 해제 | 참석 해제: 오늘 참석 전원 off | 게임/선수 초기화: 되돌릴 수 없음
-              </p>
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
 
-      {/* Player Edit Modal */}
       <PlayerEditModal
         player={editingPlayer}
         isOpen={editingPlayer !== null}
@@ -644,15 +527,12 @@ export default function GameManagerPage() {
         onUpdate={handleUpdatePlayer}
       />
 
-      {/* Attendance Picker Modal */}
       <AttendancePickerModal
         isOpen={isAttendancePickerOpen}
         onClose={() => setIsAttendancePickerOpen(false)}
         players={players}
         onConfirm={handleBulkAttending}
       />
-
-      <MigrateModal isOpen={isMigrateModalOpen} onClose={() => setIsMigrateModalOpen(false)} players={players} />
     </div>
   );
 }

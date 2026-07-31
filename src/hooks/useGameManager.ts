@@ -11,6 +11,7 @@ export interface Player {
   pinned?: boolean;
   attending?: boolean;
   waitingSince?: string | null;
+  participantType?: 'user' | 'guest';
 }
 
 export interface GameRecord {

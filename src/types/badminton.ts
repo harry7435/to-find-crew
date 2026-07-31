@@ -111,3 +111,33 @@ export interface UserProfile {
   skill_level?: number;
   phone?: string;
 }
+
+export interface CourtRow {
+  id: string;
+  session_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface BoardGameRow {
+  id: string;
+  session_id: string;
+  court_id: string | null;
+  player_ids: [string, string, string, string];
+  status: 'queued' | 'playing' | 'completed';
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface BoardPlayerStateRow {
+  id: string;
+  session_id: string;
+  session_participant_id: string | null;
+  guest_participant_id: string | null;
+  attending: boolean;
+  player_status: 'active' | 'resting' | 'playing' | 'queued';
+  pinned: boolean;
+  waiting_since: string | null;
+}
