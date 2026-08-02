@@ -29,6 +29,32 @@
      fails to match `DELETE` events. Both failure modes are silent (no error, subscription just never
      fires) — verify with manual multi-browser testing, not just single-tab checks.
 
+## Supabase Configuration Gotchas
+
+- **Auth Redirect URLs allow-list** — `signInWithOAuth`/`signInWithOtp`'s `redirectTo`/
+  `emailRedirectTo` (e.g. `http://localhost:3000/auth/callback`) only works if that exact URL is
+  also registered in the Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
+  allow-list. If it isn't, Supabase silently falls back to the dashboard's configured Site URL
+  instead — the app's `/auth/callback` page (and any logic living there, e.g. the Game Manager
+  Login Migration flag check below) is never visited at all. The Supabase JS client's default
+  `detectSessionInUrl` behavior then auto-completes the session on whatever page it lands on, so
+  login *appears* to succeed while completely bypassing the callback page. This is a silent
+  failure mode like the Realtime gotchas above — no error anywhere. Diagnose via the browser
+  Network tab: if the final redirect lands on `/` (or wherever Site URL points) with a bare
+  `?code=...` instead of on `/auth/callback`, this is the cause — fix in the Supabase Dashboard,
+  not in code.
+
+## Project Structure & Layout Architecture
+
+- `<Header />` is rendered globally by `src/components/layout/AppShell.tsx`, applied once in
+  `src/app/layout.tsx` — not by individual pages. Any new page automatically gets the header plus
+  matching top padding.
+- **Exclusion list** — `AppShell.tsx` hard-codes a short list of routes that opt out of the global
+  header: `/random-picker` (drives its own full-screen, state-based header visibility during the
+  picker game), `/auth/login`, `/auth/callback` (auth-flow pages where a header is redundant). If
+  a new page needs the same kind of custom/no header treatment, add its path to that list rather
+  than fighting the global header from within the page.
+
 ## Git Workflow
 
 - **Never run `git add` or `git commit` in this repo, ever, without being explicitly asked in the
