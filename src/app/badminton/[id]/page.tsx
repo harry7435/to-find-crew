@@ -20,7 +20,7 @@ import { QRCodeSVG } from 'qrcode.react';
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
@@ -198,7 +198,7 @@ export default function SessionDetailPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
