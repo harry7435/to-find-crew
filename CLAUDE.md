@@ -43,6 +43,16 @@
   Network tab: if the final redirect lands on `/` (or wherever Site URL points) with a bare
   `?code=...` instead of on `/auth/callback`, this is the cause — fix in the Supabase Dashboard,
   not in code.
+- **`useAuth()` loading race in role-based branching** — `AuthContext` (`src/contexts/AuthContext.tsx`)
+  initializes `user` to `null` and `loading` to `true`; `user` only becomes accurate once the async
+  `supabase.auth.getSession()` call resolves and `loading` flips to `false`. Any page that branches
+  rendering on `user?.id` (e.g. `isOrganizer = user?.id === session.creator_id`) must gate on
+  `loading` too, not just the page's own data-fetch loading state — otherwise there's a window where
+  `user` is `null` and the branch picks the wrong UI (e.g. an organizer briefly renders as a
+  spectator) before flipping to the correct state. No error is thrown; it just silently shows the
+  wrong branch for a moment. Fix pattern: destructure `loading: authLoading` from `useAuth()` and
+  fold it into the page's existing loading guard, e.g. `if (isLoading || authLoading) return <Spinner />`
+  before computing role-dependent variables. See `src/app/badminton/[id]/page.tsx` (commit `d26b3d2`).
 
 ## Project Structure & Layout Architecture
 
@@ -80,6 +90,30 @@
   feature existed (redirect to `/`, no auto-opened modal) — this backward-compatibility path must
   keep working for every login flow that isn't game-manager migration (e.g.
   `/badminton/invite/[code]`).
+
+## Spectator Board Read-Only Duplication Pattern
+
+- `/badminton/[id]` branches on `isOrganizer = user?.id === session.creator_id` to render either
+  `OrganizerBoard` (full read/write, via `useBoardRealtime`) or `SpectatorBoard` (read-only, via
+  `useBoardSpectator`) — see `src/app/badminton/[id]/page.tsx`.
+- **`useBoardRealtime` (`src/hooks/useBoardRealtime.ts`) and `useBoardSpectator`
+  (`src/hooks/useBoardSpectator.ts`) intentionally duplicate their Supabase fetch/subscribe
+  boilerplate (~20 lines: the 5-table `Promise.all` fetch + `postgres_changes` subscription
+  wiring).** Only the pure mapping logic is shared, via `buildSnapshot()` in
+  `src/utils/boardSnapshot.ts`. This was a deliberate, user-approved trade-off to keep
+  `useBoardSpectator` fully independent of `useBoardRealtime` — no read-only hook is allowed to
+  share code paths with the hook that performs writes (including the `board_player_state` seeding
+  `INSERT` that `useBoardRealtime` does on load), so that it's structurally impossible for a
+  spectator/unauthenticated visitor to trigger a write. **Do not "clean up" this duplication by
+  merging the two hooks or adding a read/write mode flag to `useBoardRealtime`** without checking
+  with the user first — the duplication is the safety mechanism, not an oversight.
+- The two hooks also use different Supabase Realtime channel names on purpose —
+  `board-${sessionId}` (organizer) vs `board-spectator-${sessionId}` (spectator) — so the two
+  roles never share a channel subscription instance.
+- Known follow-up (not yet fixed): the organizer board currently renders both a "인원 풀" and a
+  separate "참가자 목록" that visibly overlap/duplicate each other in the UI. This is deferred to
+  the "UI 재설계" roadmap item (see `docs/superpowers/specs/2026-07-14-board-persistence-design.md`
+  로드맵 항목 4) rather than fixed inline.
 
 ## Testing / Verification
 
