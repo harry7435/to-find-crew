@@ -3,57 +3,12 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
-
-const SKILL_LEVEL_FROM_NUMBER: Record<number, NonNullable<Player['skillLevel']>> = {
-  0: 'E',
-  1: 'D',
-  2: 'C',
-  3: 'B',
-  4: 'A',
-  5: 'S',
-};
-
-const SKILL_LEVEL_TO_NUMBER: Record<NonNullable<Player['skillLevel']>, number> = {
-  E: 0,
-  D: 1,
-  C: 2,
-  B: 3,
-  A: 4,
-  S: 5,
-};
-
-interface RawSessionParticipant {
-  id: string;
-  user: { name: string; gender?: string; skill_level?: number } | null;
-}
-
-interface RawGuestParticipant {
-  id: string;
-  name: string;
-  gender: string;
-  skill_level: number;
-  age_group: string;
-}
-
-function toPlayer(
-  participantId: string,
-  type: 'user' | 'guest',
-  info: { name: string; gender?: string; skill_level?: number; age_group?: string },
-  state: BoardPlayerStateRow | undefined,
-): Player {
-  return {
-    id: participantId,
-    participantType: type,
-    name: info.name,
-    gender: info.gender === 'male' || info.gender === 'female' ? info.gender : undefined,
-    skillLevel: info.skill_level !== undefined ? SKILL_LEVEL_FROM_NUMBER[info.skill_level] : undefined,
-    ageGroup: info.age_group ? ((info.age_group === '60s' ? '60s+' : info.age_group) as Player['ageGroup']) : undefined,
-    status: state?.player_status ?? 'resting',
-    pinned: state?.pinned ?? false,
-    attending: state?.attending ?? false,
-    waitingSince: state?.waiting_since ?? null,
-  };
-}
+import {
+  buildSnapshot,
+  SKILL_LEVEL_TO_NUMBER,
+  type RawSessionParticipant,
+  type RawGuestParticipant,
+} from '@/utils/boardSnapshot';
 
 async function updatePlayerState(
   participantId: string,
@@ -99,21 +54,21 @@ export function useBoardRealtime(sessionId: string) {
     const guests = (guestParticipants ?? []) as RawGuestParticipant[];
     const existingStates = (stateRows ?? []) as BoardPlayerStateRow[];
 
-    const stateBySp = new Map(
-      existingStates.filter((s) => s.session_participant_id).map((s) => [s.session_participant_id as string, s]),
+    const existingSpIds = new Set(
+      existingStates.filter((s) => s.session_participant_id).map((s) => s.session_participant_id as string),
     );
-    const stateByGp = new Map(
-      existingStates.filter((s) => s.guest_participant_id).map((s) => [s.guest_participant_id as string, s]),
+    const existingGpIds = new Set(
+      existingStates.filter((s) => s.guest_participant_id).map((s) => s.guest_participant_id as string),
     );
 
     const missingInserts: Array<Record<string, unknown>> = [];
     participants.forEach((p) => {
-      if (!stateBySp.has(p.id)) {
+      if (!existingSpIds.has(p.id)) {
         missingInserts.push({ session_id: sessionId, session_participant_id: p.id });
       }
     });
     guests.forEach((g) => {
-      if (!stateByGp.has(g.id)) {
+      if (!existingGpIds.has(g.id)) {
         missingInserts.push({ session_id: sessionId, guest_participant_id: g.id });
       }
     });
@@ -124,42 +79,17 @@ export function useBoardRealtime(sessionId: string) {
       allStates = [...existingStates, ...((inserted ?? []) as BoardPlayerStateRow[])];
     }
 
-    const finalStateBySp = new Map(
-      allStates.filter((s) => s.session_participant_id).map((s) => [s.session_participant_id as string, s]),
-    );
-    const finalStateByGp = new Map(
-      allStates.filter((s) => s.guest_participant_id).map((s) => [s.guest_participant_id as string, s]),
-    );
-
-    const mappedPlayers: Player[] = [
-      ...participants.filter((p) => p.user).map((p) => toPlayer(p.id, 'user', p.user!, finalStateBySp.get(p.id))),
-      ...guests.map((g) => toPlayer(g.id, 'guest', g, finalStateByGp.get(g.id))),
-    ];
-    setPlayers(mappedPlayers);
-
-    const games_ = (gameRows ?? []) as BoardGameRow[];
-
-    const mappedCourts: Court[] = ((courtRows ?? []) as CourtRow[]).map((c) => {
-      const activeGame = games_.find((g) => g.court_id === c.id && g.status === 'playing');
-      return {
-        id: c.id,
-        name: c.name,
-        playerIds: activeGame ? activeGame.player_ids : null,
-        gameStartedAt: activeGame?.started_at ?? null,
-        gameId: activeGame?.id ?? null,
-      };
+    const snapshot = buildSnapshot({
+      participants,
+      guests,
+      states: allStates,
+      courtRows: (courtRows ?? []) as CourtRow[],
+      gameRows: (gameRows ?? []) as BoardGameRow[],
     });
-    setCourts(mappedCourts);
-
-    const mappedQueue: QueueItem[] = games_
-      .filter((g) => g.status === 'queued')
-      .map((g) => ({ id: g.id, playerIds: g.player_ids, queuedAt: g.queued_at }));
-    setQueue(mappedQueue);
-
-    const mappedGames: GameRecord[] = games_
-      .filter((g) => g.status === 'completed')
-      .map((g) => ({ id: g.id, players: g.player_ids, confirmedAt: g.completed_at! }));
-    setGames(mappedGames);
+    setPlayers(snapshot.players);
+    setCourts(snapshot.courts);
+    setQueue(snapshot.queue);
+    setGames(snapshot.games);
   }, [sessionId]);
 
   useEffect(() => {
