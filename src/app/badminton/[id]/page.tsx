@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ParticipantsList from '@/components/badminton/ParticipantsList';
 import OrganizerBoard from '@/components/badminton/OrganizerBoard';
+import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +20,7 @@ import { QRCodeSVG } from 'qrcode.react';
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
@@ -197,7 +198,7 @@ export default function SessionDetailPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
@@ -228,6 +229,8 @@ export default function SessionDetailPage() {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const isOrganizer = user?.id === session.creator_id;
 
   return (
     <>
@@ -346,17 +349,19 @@ export default function SessionDetailPage() {
           onParticipantRemoved={fetchSession}
         />
 
-        {/* 게임 관리 (모임장 전용) */}
-        {user?.id === session.creator_id && (
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold mb-3">게임 관리</h2>
-            {session.status === 'completed' ? (
-              <p className="text-sm text-gray-500">종료된 모임입니다. 게임 관리 기능은 사용할 수 없습니다.</p>
-            ) : (
-              <OrganizerBoard sessionId={session.id} />
-            )}
-          </div>
-        )}
+        {/* 게임 관리 (모임장) / 실시간 현황판 (그 외 전원) */}
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-3">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+          {session.status === 'completed' ? (
+            <p className="text-sm text-gray-500">
+              종료된 모임입니다. {isOrganizer ? '게임 관리' : '현황판'} 기능은 사용할 수 없습니다.
+            </p>
+          ) : isOrganizer ? (
+            <OrganizerBoard sessionId={session.id} />
+          ) : (
+            <SpectatorBoard sessionId={session.id} />
+          )}
+        </div>
 
         {/* 팀 정보 (있는 경우) */}
         {session.teams && session.teams.length > 0 && (
