@@ -110,10 +110,44 @@
 - The two hooks also use different Supabase Realtime channel names on purpose —
   `board-${sessionId}` (organizer) vs `board-spectator-${sessionId}` (spectator) — so the two
   roles never share a channel subscription instance.
-- Known follow-up (not yet fixed): the organizer board currently renders both a "인원 풀" and a
-  separate "참가자 목록" that visibly overlap/duplicate each other in the UI. This is deferred to
-  the "UI 재설계" roadmap item (see `docs/superpowers/specs/2026-07-14-board-persistence-design.md`
-  로드맵 항목 4) rather than fixed inline.
+- **Resolved (2026-08-11/12):** the old "인원 풀" vs. separate "참가자 목록" duplication noted above
+  was the "UI 재설계" roadmap item (`docs/superpowers/specs/2026-07-14-board-persistence-design.md`
+  로드맵 항목 4) — it shipped. `ParticipantsList.tsx` was deleted; `OrganizerBoard` now uses a single
+  `Tabs` (`인원 풀` / `팀 뽑기`) in its left column instead of two separately-scrolling lists. See
+  `docs/superpowers/specs/2026-08-11-board-roster-layout-design.md` and
+  `docs/superpowers/specs/2026-08-11-team-court-box-design.md` for the design rationale, and
+  `src/components/badminton/OrganizerBoard.tsx`'s `Tabs`/`TabsContent` structure for the current
+  implementation.
+
+## Game Manager Board Shared-State & Styling Conventions
+
+- **Controlled-prop lifting for cross-component shared UI state.** When a piece of UI state needs to
+  be visible/actionable from two separate DOM locations owned by *different* components — e.g. a
+  parent's desktop header action-button group and a child's own mobile-only button row — keep it as a
+  controlled prop pair on the child (`value` + `onValueChange`), with the actual `useState` living in
+  the parent, rather than as child-local state. This is a repeated pattern, not a one-off:
+  `selectedPlayers`, `isCustomPicking`, and `isEditingSelection` (named `isEditingCustomPick` in
+  `OrganizerBoard.tsx`/`game-manager/page.tsx`) all follow it. Example: `CustomTeamPicker`'s
+  `isEditingSelection`/`onEditingSelectionChange` props exist so the "다시 선택" button can render
+  both in `OrganizerBoard`'s desktop header (the `isCustomPicking` branch next to `TabsList`) and in
+  `CustomTeamPicker`'s own mobile-only button row (the bottom `md:hidden` block) and stay in sync.
+  Don't "simplify" these back to local `useState` in the child without checking whether a parent call
+  site depends on the same value.
+- **`boundedOnDesktop` (`CustomTeamPicker.tsx`) is a related but distinct convention — layout-budget
+  delegation, not shared state.** It tells the child whether an ancestor (`OrganizerBoard`'s
+  fixed-viewport `md:` dashboard) has already given its tab a fixed height to fill and scroll within
+  (`true`), vs. the child sitting on an ordinary unbounded page like `/game-manager` and needing to
+  self-limit its own scroll height via `max-h-[55vh]` (`false`, the default). Any new board
+  sub-component embedded in both the fixed-viewport `OrganizerBoard` dashboard and a normal-scrolling
+  page should follow this same boolean-prop pattern rather than hardcoding one layout assumption.
+- **`TeamCourtBox` (`src/components/game-manager/TeamCourtBox.tsx`) deliberately splits color across
+  two independent channels — do not merge them.** Player name text + gender icon color always encodes
+  *gender* (`getGenderColor()`: `text-blue-600` = male, `text-pink-600` = female), never team side.
+  Team side (A = left / B = right) is encoded only via background wash (`bg-blue-50` vs `bg-violet-50`
+  on the side container) and border color (`border-blue-200` vs `border-violet-200` on each chip),
+  never via text color. All consumers (`CourtManager`, `GameQueue`, `GameHistory`, `TeamPicker`,
+  `CustomTeamPicker`, `SpectatorBoard`) render through this single component, so changing its color
+  logic changes all of them at once — check both channels stay independent before "simplifying."
 
 ## Testing / Verification
 

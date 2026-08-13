@@ -51,3 +51,6 @@ next-env.d.ts
 .cursor
 .omc
 .superpowers
+
+# Claude Code / superpowers working docs (specs & plans) — local-only, not committed
+/docs/superpowers/
