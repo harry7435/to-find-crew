@@ -120,3 +120,28 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 스크롤 가능한 영역 위/아래에 더 볼 내용이 있음을 알려주는 그림자.
+   스크롤 위치에 따라 자동으로 나타나고 사라진다(JS 불필요).
+   background-color를 별도로 지정해야 한다 — background 축약 속성만 쓰면
+   지정 안 한 나머지 영역의 배경색이 투명으로 리셋되어 뒤 콘텐츠가 비쳐 보인다. */
+.scroll-fade {
+  background-color: white;
+  background-image:
+    linear-gradient(white 30%, rgb(255 255 255 / 0%)),
+    linear-gradient(rgb(255 255 255 / 0%), white 70%),
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 12%), rgb(0 0 0 / 0%)),
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 12%), rgb(0 0 0 / 0%));
+  background-position:
+    center top,
+    center bottom,
+    center top,
+    center bottom;
+  background-repeat: no-repeat;
+  background-size:
+    100% 24px,
+    100% 24px,
+    100% 10px,
+    100% 10px;
+  background-attachment: local, local, scroll, scroll;
+}

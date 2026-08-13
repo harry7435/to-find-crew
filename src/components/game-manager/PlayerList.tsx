@@ -77,9 +77,9 @@ export default function PlayerList({
   const sortedPlayers = [...filteredPlayers].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
   return (
-    <div className="space-y-3">
-      {/* 상단 컨트롤 */}
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-3 md:h-full md:min-h-0">
+      {/* 상단 컨트롤 (고정) */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
         <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
           {(['all', 'attending', 'absent'] as const).map((f) => (
             <button
@@ -111,7 +111,7 @@ export default function PlayerList({
       ) : sortedPlayers.length === 0 ? (
         <div className="text-center py-6 text-gray-500 text-sm">해당 조건의 선수가 없습니다</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="flex flex-col gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
           {sortedPlayers.map((player) => {
             const gameCount = gameCountsMap?.get(player.id) || 0;
             const ageLabel = getAgeGroupLabel(player.ageGroup);

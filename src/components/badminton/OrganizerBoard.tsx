@@ -3,13 +3,14 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { UserPlus, History, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
 import { Player } from '@/hooks/useGameManager';
-import PlayerForm from '@/components/game-manager/PlayerForm';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
+import PlayerAddModal from '@/components/game-manager/PlayerAddModal';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
 import AttendancePickerModal from '@/components/game-manager/AttendancePickerModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
@@ -36,6 +37,7 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     setAttendingBulk,
     removeGame,
     resetPlayers,
+    resetWaitingTimes,
     resetGames,
     addCourt,
     removeCourt,
@@ -49,23 +51,15 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
   } = useBoardRealtime(sessionId);
 
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
+  const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
+  const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
+  const [leftTab, setLeftTab] = useState<'pool' | 'pick'>('pool');
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
-  const [openSections, setOpenSections] = useState({
-    registration: false,
-    playerList: true,
-    teamPicker: true,
-    queue: true,
-    courtManager: true,
-    gameHistory: false,
-    resetActions: false,
-  });
-
-  const toggleSection = useCallback((key: keyof typeof openSections) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -179,9 +173,22 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     [courts, cancelCourtGame],
   );
 
-  const handleCustomConfirm = useCallback((selected: [Player, Player, Player, Player]) => {
-    setPickedPlayers(selected);
+  const handleStartCustomPicking = useCallback(() => {
+    setSelectedPlayers([]);
+    setIsCustomPicking(true);
+  }, []);
+
+  const handleCustomConfirm = useCallback(() => {
+    if (selectedPlayers.length !== 4) return;
+    setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
     setIsCustomPicking(false);
+    setSelectedPlayers([]);
+  }, [selectedPlayers]);
+
+  const handleCustomCancel = useCallback(() => {
+    setIsCustomPicking(false);
+    setPickedPlayers(null);
+    setSelectedPlayers([]);
   }, []);
 
   const handleEditPlayer = useCallback((player: Player) => setEditingPlayer(player), []);
@@ -291,6 +298,17 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     }
   }, [players, setAttendingBulk]);
 
+  const handleResetWaitingTimes = useCallback(() => {
+    if (!players.some((p) => p.status === 'active')) {
+      toast.error('대기 중인 선수가 없습니다');
+      return;
+    }
+    if (confirm('대기 중인 선수 전원의 대기 시간을 초기화하시겠습니까?')) {
+      resetWaitingTimes();
+      toast.success('대기 시간이 초기화되었습니다');
+    }
+  }, [players, resetWaitingTimes]);
+
   if (isLoading) {
     return (
       <div className="py-8 text-center">
@@ -306,50 +324,72 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
   const queuedCount = players.filter((p) => p.status === 'queued').length;
 
   return (
-    <div className="space-y-3">
-      <Collapsible open={openSections.registration} onOpenChange={() => toggleSection('registration')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">선수 등록</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.registration ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <PlayerForm onAddPlayer={handleAddPlayer} />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+    <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
+      <div className="shrink-0 flex justify-end">
+        <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
+          <History className="h-4 w-4 mr-1" />
+          게임 기록 · 초기화
+        </Button>
+      </div>
 
-      <Collapsible open={openSections.playerList} onOpenChange={() => toggleSection('playerList')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">
-                  인원 풀 (참석 {attendingCount}/{players.length}명)
-                  {(activeCount > 0 || playingCount > 0 || queuedCount > 0) && (
-                    <span className="text-sm text-gray-500 ml-2">
-                      (활성: {activeCount}
-                      {playingCount > 0 && <> · 게임중: {playingCount}</>}
-                      {queuedCount > 0 && <> · 대기열: {queuedCount}</>})
-                    </span>
-                  )}
-                </CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.playerList ? 'rotate-180' : ''}`}
-                />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:flex-1 md:min-h-0">
+        {/* 왼쪽: 인원 풀 / 팀 뽑기 탭 전환 — 활성 탭이 컬럼 전체 높이를 쓰고 그 안에서만 스크롤된다 */}
+        <Card className="md:min-h-0">
+          <Tabs
+            value={leftTab}
+            onValueChange={(v) => setLeftTab(v as 'pool' | 'pick')}
+            className="gap-3 md:flex-1 md:min-h-0"
+          >
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-6">
+              <TabsList>
+                <TabsTrigger value="pool">인원 풀</TabsTrigger>
+                <TabsTrigger value="pick">팀 뽑기</TabsTrigger>
+              </TabsList>
+              <div className="hidden md:flex items-center gap-2 shrink-0">
+                {leftTab === 'pool' ? (
+                  <Button size="sm" variant="outline" onClick={() => setIsAddPlayerModalOpen(true)}>
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />
+                    선수 등록
+                  </Button>
+                ) : isCustomPicking ? (
+                  <>
+                    <Button size="sm" onClick={handleCustomConfirm} disabled={selectedPlayers.length !== 4}>
+                      확정
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleCustomCancel}>
+                      취소
+                    </Button>
+                  </>
+                ) : (
+                  pickedPlayers && (
+                    <>
+                      <Button size="sm" onClick={handleConfirmGame}>
+                        확정
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleRandomPickTeams}>
+                        다시 뽑기
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleStartCustomPicking}>
+                        직접 선택
+                      </Button>
+                    </>
+                  )
+                )}
               </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
+            </div>
+
+            <TabsContent value="pool" className="flex-none px-6 pb-6 md:flex md:flex-col md:flex-1 md:min-h-0">
+              <p className="shrink-0 text-sm text-gray-500 -mt-1 mb-2">
+                참석 {attendingCount}/{players.length}명
+                {(activeCount > 0 || playingCount > 0 || queuedCount > 0) && (
+                  <>
+                    {' '}
+                    (활성: {activeCount}
+                    {playingCount > 0 && <> · 게임중: {playingCount}</>}
+                    {queuedCount > 0 && <> · 대기열: {queuedCount}</>})
+                  </>
+                )}
+              </p>
               <PlayerList
                 players={players}
                 onRemovePlayer={handleRemovePlayer}
@@ -362,33 +402,18 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
               />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+            </TabsContent>
 
-      <Collapsible open={openSections.teamPicker} onOpenChange={() => toggleSection('teamPicker')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">팀 뽑기</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.teamPicker ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
+            <TabsContent value="pick" className="flex-none px-6 pb-6 md:flex md:flex-col md:flex-1 md:min-h-0">
               {isCustomPicking ? (
                 <CustomTeamPicker
                   players={players}
+                  games={games}
+                  selectedPlayers={selectedPlayers}
+                  onSelectedPlayersChange={setSelectedPlayers}
                   onConfirm={handleCustomConfirm}
-                  onCancel={() => {
-                    setIsCustomPicking(false);
-                    setPickedPlayers(null);
-                  }}
+                  onCancel={handleCustomCancel}
+                  boundedOnDesktop
                 />
               ) : (
                 <TeamPicker
@@ -398,48 +423,19 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                   onRandomPick={handleRandomPickTeams}
                   onConfirm={handleConfirmGame}
                   onReject={handleRandomPickTeams}
-                  onCustomPick={() => setIsCustomPicking(true)}
+                  onCustomPick={handleStartCustomPicking}
+                  onReorderPickedPlayers={setPickedPlayers}
                 />
               )}
-            </CardContent>
-          </CollapsibleContent>
+            </TabsContent>
+          </Tabs>
         </Card>
-      </Collapsible>
 
-      <Collapsible open={openSections.queue} onOpenChange={() => toggleSection('queue')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">
-                  대기열
-                  {queue.length > 0 && <span className="text-sm text-gray-500 ml-2">({queue.length}개)</span>}
-                </CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.queue ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <GameQueue
-                queue={queue}
-                courts={courts}
-                players={players}
-                onAssignCourt={handleAssignQueueToCourt}
-                onRemove={handleRemoveFromQueue}
-              />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Collapsible open={openSections.courtManager} onOpenChange={() => toggleSection('courtManager')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
+        {/* 오른쪽: 코트 관리 + 대기열 (세로로 쌓임, 항상 둘 다 펼쳐짐) */}
+        <div className="flex flex-col gap-3 md:min-h-0">
+          <Card className="gap-3 md:flex-1 md:min-h-0">
+            <CardHeader className="shrink-0 pb-3">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">
                   코트 관리
                   {courts.some((c) => c.playerIds !== null) && (
@@ -448,17 +444,18 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                     </span>
                   )}
                 </CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.courtManager ? 'rotate-180' : ''}`}
-                />
+                <Button size="sm" variant="outline" onClick={() => setIsAddingCourt(true)} className="shrink-0">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  코트 추가
+                </Button>
               </div>
             </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 md:flex md:flex-col md:flex-1 md:min-h-0">
               <CourtManager
                 courts={courts}
                 players={players}
+                isAdding={isAddingCourt}
+                onCancelAdding={() => setIsAddingCourt(false)}
                 onAddCourt={addCourt}
                 onRemoveCourt={handleRemoveCourt}
                 onRenameCourt={renameCourt}
@@ -466,59 +463,57 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                 onCancelGame={handleCancelCourtGame}
               />
             </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+          </Card>
 
-      <Collapsible open={openSections.gameHistory} onOpenChange={() => toggleSection('gameHistory')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">게임 기록 ({games.length})</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.gameHistory ? 'rotate-180' : ''}`}
-                />
-              </div>
+          <Card className="gap-3 md:flex-1 md:min-h-0">
+            <CardHeader className="shrink-0 pb-3">
+              <CardTitle className="text-base md:text-lg">
+                대기열
+                {queue.length > 0 && <span className="text-sm text-gray-500 ml-2">({queue.length}개)</span>}
+              </CardTitle>
             </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
+            <CardContent className="pt-0 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
+              <GameQueue
+                queue={queue}
+                courts={courts}
+                players={players}
+                onAssignCourt={handleAssignQueueToCourt}
+                onRemove={handleRemoveFromQueue}
+              />
             </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+          </Card>
+        </div>
+      </div>
 
-      <Collapsible open={openSections.resetActions} onOpenChange={() => toggleSection('resetActions')}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">초기화</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.resetActions ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                <Button onClick={handleResetAttendance} variant="secondary" size="sm">
-                  참석 전체 해제
-                </Button>
-                <Button onClick={handleResetGames} variant="outline" size="sm">
-                  게임 기록 초기화
-                </Button>
-                <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                  게스트 선수 초기화
-                </Button>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+      <Sheet open={isMoreSheetOpen} onOpenChange={setIsMoreSheetOpen}>
+        <SheetContent className="flex flex-col">
+          <SheetHeader className="shrink-0">
+            <SheetTitle>게임 기록 · 초기화</SheetTitle>
+          </SheetHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-fade px-4">
+            <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
+          </div>
+
+          <div className="shrink-0 px-4 pb-6 border-t pt-4">
+            <h3 className="text-sm font-medium mb-2">초기화</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <Button onClick={handleResetWaitingTimes} variant="secondary" size="sm">
+                대기 시간 초기화
+              </Button>
+              <Button onClick={handleResetAttendance} variant="secondary" size="sm">
+                참석 전체 해제
+              </Button>
+              <Button onClick={handleResetGames} variant="outline" size="sm">
+                게임 기록 초기화
+              </Button>
+              <Button onClick={handleResetPlayers} variant="destructive" size="sm">
+                게스트 선수 초기화
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <PlayerEditModal
         player={editingPlayer}
@@ -532,6 +527,12 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
         onClose={() => setIsAttendancePickerOpen(false)}
         players={players}
         onConfirm={handleBulkAttending}
+      />
+
+      <PlayerAddModal
+        isOpen={isAddPlayerModalOpen}
+        onClose={() => setIsAddPlayerModalOpen(false)}
+        onAddPlayer={handleAddPlayer}
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGameManager, Player } from '@/hooks/useGameManager';
 import PlayerForm from '@/components/game-manager/PlayerForm';
@@ -50,7 +50,9 @@ export default function GameManagerPage() {
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
+  const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
+  const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
   const [openSections, setOpenSections] = useState({
     registration: false,
@@ -214,9 +216,22 @@ export default function GameManagerPage() {
     handleRandomPickTeams();
   }, [handleRandomPickTeams]);
 
-  const handleCustomConfirm = useCallback((players: [Player, Player, Player, Player]) => {
-    setPickedPlayers(players);
+  const handleStartCustomPicking = useCallback(() => {
+    setSelectedPlayers([]);
+    setIsCustomPicking(true);
+  }, []);
+
+  const handleCustomConfirm = useCallback(() => {
+    if (selectedPlayers.length !== 4) return;
+    setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
     setIsCustomPicking(false);
+    setSelectedPlayers([]);
+  }, [selectedPlayers]);
+
+  const handleCustomCancel = useCallback(() => {
+    setIsCustomPicking(false);
+    setPickedPlayers(null);
+    setSelectedPlayers([]);
   }, []);
 
   const handleEditPlayer = useCallback((player: Player) => {
@@ -477,11 +492,39 @@ export default function GameManagerPage() {
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">팀 뽑기</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.teamPicker ? 'rotate-180' : ''}`}
-                />
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="hidden md:flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    {isCustomPicking ? (
+                      <>
+                        <Button size="sm" onClick={handleCustomConfirm} disabled={selectedPlayers.length !== 4}>
+                          확정
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleCustomCancel}>
+                          취소
+                        </Button>
+                      </>
+                    ) : (
+                      pickedPlayers && (
+                        <>
+                          <Button size="sm" onClick={handleConfirmGame}>
+                            확정
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleRejectPick}>
+                            다시 뽑기
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleStartCustomPicking}>
+                            직접 선택
+                          </Button>
+                        </>
+                      )
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.teamPicker ? 'rotate-180' : ''}`}
+                  />
+                </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
@@ -490,11 +533,11 @@ export default function GameManagerPage() {
               {isCustomPicking ? (
                 <CustomTeamPicker
                   players={players}
+                  games={games}
+                  selectedPlayers={selectedPlayers}
+                  onSelectedPlayersChange={setSelectedPlayers}
                   onConfirm={handleCustomConfirm}
-                  onCancel={() => {
-                    setIsCustomPicking(false);
-                    setPickedPlayers(null);
-                  }}
+                  onCancel={handleCustomCancel}
                 />
               ) : (
                 <TeamPicker
@@ -504,7 +547,8 @@ export default function GameManagerPage() {
                   onRandomPick={handleRandomPickTeams}
                   onConfirm={handleConfirmGame}
                   onReject={handleRejectPick}
-                  onCustomPick={() => setIsCustomPicking(true)}
+                  onCustomPick={handleStartCustomPicking}
+                  onReorderPickedPlayers={setPickedPlayers}
                 />
               )}
             </CardContent>
@@ -547,7 +591,7 @@ export default function GameManagerPage() {
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">
                   코트 관리
                   {courts.some((c) => c.playerIds !== null) && (
@@ -556,9 +600,23 @@ export default function GameManagerPage() {
                     </span>
                   )}
                 </CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.courtManager ? 'rotate-180' : ''}`}
-                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!openSections.courtManager) toggleSection('courtManager');
+                      setIsAddingCourt(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    코트 추가
+                  </Button>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.courtManager ? 'rotate-180' : ''}`}
+                  />
+                </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
@@ -567,6 +625,8 @@ export default function GameManagerPage() {
               <CourtManager
                 courts={courts}
                 players={players}
+                isAdding={isAddingCourt}
+                onCancelAdding={() => setIsAddingCourt(false)}
                 onAddCourt={handleAddCourt}
                 onRemoveCourt={handleRemoveCourt}
                 onRenameCourt={handleRenameCourt}

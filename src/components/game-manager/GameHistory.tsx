@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X } from 'lucide-react';
+import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
+
+const UNKNOWN_PLAYER: Player = { id: 'unknown', name: '알 수 없음', status: 'active' };
 
 interface GameHistoryProps {
   games: GameRecord[];
@@ -56,10 +59,8 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
     );
   }
 
-  const getPlayerName = (playerId: string) => {
-    const player = players.find((p) => p.id === playerId);
-    return player ? player.name : '알 수 없음';
-  };
+  const getPlayer = (playerId: string): Player =>
+    players.find((p) => p.id === playerId) ?? { ...UNKNOWN_PLAYER, id: playerId };
 
   // Show last 10 games
   const recentGames = [...games].reverse().slice(0, 10);
@@ -95,13 +96,7 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
                 <Badge variant="outline">Game #{gameNumber}</Badge>
                 <span className="text-xs text-gray-500">{date}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {game.players.map((playerId) => (
-                  <div key={playerId} className="text-sm p-1.5 bg-gray-50 rounded">
-                    {getPlayerName(playerId)}
-                  </div>
-                ))}
-              </div>
+              <TeamCourtBox players={game.players.map(getPlayer) as [Player, Player, Player, Player]} size="compact" />
             </div>
           );
         })}

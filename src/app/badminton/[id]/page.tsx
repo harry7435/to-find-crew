@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import ParticipantsList from '@/components/badminton/ParticipantsList';
 import OrganizerBoard from '@/components/badminton/OrganizerBoard';
 import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
@@ -234,16 +234,16 @@ export default function SessionDetailPage() {
 
   return (
     <>
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="flex flex-col gap-3 px-4 sm:px-6 lg:px-8 py-4 md:h-[calc(100vh-4rem)] md:overflow-hidden">
         {/* 헤더 */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="shrink-0 flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             뒤로가기
           </Button>
 
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowQRCode(!showQRCode)}>
+            <Button variant="outline" size="sm" onClick={() => setShowQRCode(true)}>
               <QrCode className="h-4 w-4 mr-2" />
               QR 코드
             </Button>
@@ -254,104 +254,45 @@ export default function SessionDetailPage() {
           </div>
         </div>
 
-        {/* QR 코드 섹션 */}
-        {showQRCode && session && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-lg">QR 코드로 참가하기</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center space-y-4">
-                <div className="p-4 bg-white rounded-lg border-2">
-                  <QRCodeSVG
-                    value={`${window.location.origin}/badminton/invite/${session.access_code}`}
-                    size={256}
-                    level="H"
-                  />
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-gray-600">QR 코드를 스캔하면 바로 참가할 수 있습니다</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={copyInviteLink}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      초대 링크 복사
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* 번개 모임 정보 요약 바 */}
+        <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-white px-4 py-3">
+          <span className="text-lg font-semibold text-gray-900">{session.name}</span>
+          {getStatusBadge(session.status)}
+          {session.creator && <span className="text-sm text-gray-500">생성자: {session.creator.name}</span>}
 
-        {/* 번개 모임 정보 카드 */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-2xl mb-2">{session.name}</CardTitle>
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(session.status)}
-                  {session.creator && <span className="text-sm text-gray-600">생성자: {session.creator.name}</span>}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm text-gray-600">접근 코드</span>
-                  <Button variant="outline" size="sm" onClick={copyAccessCode} className="font-mono">
-                    <Copy className="h-4 w-4 mr-1" />
-                    {session.access_code}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
+          <span className="flex items-center gap-1 text-sm text-gray-600">
+            <MapPin className="h-4 w-4 text-gray-500" />
+            {session.venue_name}
+          </span>
+          <span className="flex items-center gap-1 text-sm text-gray-600">
+            <Calendar className="h-4 w-4 text-gray-500" />
+            {sessionDateTime}
+          </span>
+          <span className="flex items-center gap-1 text-sm text-gray-600">
+            <Users className="h-4 w-4 text-gray-500" />
+            코트 {session.court_count}개
+          </span>
 
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-gray-500" />
-                <span>{session.venue_name}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-gray-500" />
-                <span>{sessionDateTime}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-500" />
-                <span>코트 {session.court_count}개</span>
-              </div>
-            </div>
-
-            {/* 관리자 전용 버튼 */}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={copyAccessCode} className="font-mono text-xs">
+              <Copy className="h-3.5 w-3.5 mr-1" />
+              {session.access_code}
+            </Button>
             {user && session.creator_id === user.id && (
-              <div className="pt-4 border-t">
-                <Link href={`/badminton/edit/${session.id}`}>
-                  <Button variant="outline" size="sm" className="cursor-pointer">
-                    <Settings className="h-4 w-4 mr-2" />
-                    모임 관리
-                  </Button>
-                </Link>
-              </div>
+              <Link href={`/badminton/edit/${session.id}`}>
+                <Button variant="outline" size="sm" className="cursor-pointer text-xs">
+                  <Settings className="h-3.5 w-3.5 mr-1" />
+                  모임 관리
+                </Button>
+              </Link>
             )}
-          </CardContent>
-        </Card>
-
-        {/* 참가자 목록 */}
-        <ParticipantsList
-          participants={session.session_participants || []}
-          guestParticipants={session.guest_participants || []}
-          creatorId={session.creator_id}
-          maxParticipants={session.max_participants}
-          currentUserId={user?.id}
-          sessionId={session.id}
-          onParticipantRemoved={fetchSession}
-        />
+          </div>
+        </div>
 
         {/* 게임 관리 (모임장) / 실시간 현황판 (그 외 전원) */}
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold mb-3">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+        <h2 className="shrink-0 text-lg font-semibold">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+
+        <div className="md:flex-1 md:min-h-0 md:overflow-hidden">
           {session.status === 'completed' ? (
             <p className="text-sm text-gray-500">
               종료된 모임입니다. {isOrganizer ? '게임 관리' : '현황판'} 기능은 사용할 수 없습니다.
@@ -363,34 +304,52 @@ export default function SessionDetailPage() {
           )}
         </div>
 
-        {/* 팀 정보 (있는 경우) */}
-        {session.teams && session.teams.length > 0 && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>팀 배정</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {session.teams.map((team) => (
-                  <div key={team.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium">팀 {team.team_number}</h4>
-                      <Badge variant="outline">{team.court_number ? `코트 ${team.court_number}` : '대기'}</Badge>
-                    </div>
-                    <div className="space-y-2">
-                      {team.team_members?.map((member) => (
-                        <div key={member.id} className="text-sm">
-                          {member.user.name}
-                        </div>
-                      )) || <p className="text-sm text-gray-500">멤버 배정 대기</p>}
-                    </div>
-                  </div>
-                ))}
+        {/* 게스트 사용자 안내 */}
+        {!user && (
+          <Card className="shrink-0 border-blue-200 bg-blue-50">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-3">
+                <p className="text-sm text-blue-800">
+                  💡 <strong>게스트로 볼 수 있습니다</strong>
+                </p>
+                <p className="text-xs text-blue-600">
+                  로그인하시면 참가 취소, 프로필 관리 등 더 많은 기능을 사용할 수 있습니다.
+                </p>
+                <Link href="/auth/login">
+                  <Button size="sm" variant="outline" className="mt-2 cursor-pointer">
+                    로그인하기
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* QR 코드 다이얼로그 */}
+      <Dialog open={showQRCode} onOpenChange={setShowQRCode}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>QR 코드로 참가하기</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center space-y-4">
+            <div className="p-4 bg-white rounded-lg border-2">
+              <QRCodeSVG
+                value={`${window.location.origin}/badminton/invite/${session.access_code}`}
+                size={256}
+                level="H"
+              />
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-sm text-gray-600">QR 코드를 스캔하면 바로 참가할 수 있습니다</p>
+              <Button variant="outline" size="sm" onClick={copyInviteLink}>
+                <Copy className="h-4 w-4 mr-2" />
+                초대 링크 복사
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 사용자 정보 입력 모달 (로그인한 사용자만) */}
       {user && (
@@ -400,27 +359,6 @@ export default function SessionDetailPage() {
           onSubmit={handleUserInfoSubmit}
           isLoading={isUpdatingProfile}
         />
-      )}
-
-      {/* 게스트 사용자 안내 */}
-      {!user && (
-        <Card className="mt-6 border-blue-200 bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-3">
-              <p className="text-sm text-blue-800">
-                💡 <strong>게스트로 볼 수 있습니다</strong>
-              </p>
-              <p className="text-xs text-blue-600">
-                로그인하시면 참가 취소, 프로필 관리 등 더 많은 기능을 사용할 수 있습니다.
-              </p>
-              <Link href="/auth/login">
-                <Button size="sm" variant="outline" className="mt-2 cursor-pointer">
-                  로그인하기
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       )}
     </>
   );

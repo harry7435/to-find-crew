@@ -272,6 +272,16 @@ export function useBoardRealtime(sessionId: string) {
     await loadSnapshot();
   }, [sessionId, loadSnapshot]);
 
+  const resetWaitingTimes = useCallback(async () => {
+    const nowIso = new Date().toISOString();
+    await Promise.all(
+      playersRef.current
+        .filter((p) => p.status === 'active')
+        .map((p) => updatePlayerState(p.id, { waiting_since: nowIso })),
+    );
+    await loadSnapshot();
+  }, [loadSnapshot]);
+
   const addCourt = useCallback(
     async (name: string) => {
       await supabase.from('courts').insert([{ session_id: sessionId, name, sort_order: courts.length }]);
@@ -421,6 +431,7 @@ export function useBoardRealtime(sessionId: string) {
     setAttendingBulk,
     removeGame,
     resetPlayers,
+    resetWaitingTimes,
     resetGames,
     addCourt,
     removeCourt,

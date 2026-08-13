@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, X } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
+import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
 
 interface GameQueueProps {
   queue: QueueItem[];
@@ -15,11 +16,13 @@ interface GameQueueProps {
   onRemove: (queueItemId: string) => void;
 }
 
+const UNKNOWN_PLAYER: Player = { id: 'unknown', name: '알 수 없음', status: 'active' };
+
 export default function GameQueue({ queue, courts, players, onAssignCourt, onRemove }: GameQueueProps) {
   const now = useTicker();
   const freeCourts = courts.filter((c) => c.playerIds === null);
 
-  const getPlayerName = (id: string) => players.find((p) => p.id === id)?.name ?? '알 수 없음';
+  const getPlayer = (id: string): Player => players.find((p) => p.id === id) ?? { ...UNKNOWN_PLAYER, id };
 
   if (queue.length === 0) {
     return (
@@ -56,15 +59,11 @@ export default function GameQueue({ queue, courts, players, onAssignCourt, onRem
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-1 mb-2">
-              {item.playerIds.map((pid) => (
-                <span
-                  key={pid}
-                  className="text-xs bg-white border border-purple-200 rounded px-2 py-1 text-center truncate"
-                >
-                  {getPlayerName(pid)}
-                </span>
-              ))}
+            <div className="mb-2">
+              <TeamCourtBox
+                players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
+                size="compact"
+              />
             </div>
             {freeCourts.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-1">
