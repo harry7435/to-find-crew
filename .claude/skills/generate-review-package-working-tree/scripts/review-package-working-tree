@@ -49,7 +49,7 @@ task_title=$(echo "$task_text" | head -1 | sed -E 's/^#+[ \t]*//')
 files=()
 while IFS= read -r line; do
   [ -n "$line" ] && files+=("$line")
-done < <(echo "$task_text" | grep -oE '^- (Create|Modify): `[^`]+`' | sed -E 's/^- (Create|Modify): `([^`]+)`/\2/')
+done < <(echo "$task_text" | grep -oE '^- (Create|Modify): `[^`]+`' | sed -E 's/^- (Create|Modify): `([^`]+)`/\2/; s/:[0-9]+(-[0-9]+)?$//')
 
 if [ ${#files[@]} -eq 0 ]; then
   echo "no '- Create:'/'- Modify:' file entries found under Task ${n}'s **Files:** block" >&2
@@ -58,16 +58,25 @@ fi
 
 cd "$repo_root"
 
+# Git pathspecs treat `[...]` as a glob character class by default, which
+# silently fails to match real paths containing literal brackets (e.g. Next.js
+# dynamic routes like `app/[id]/route.ts`) — `:(literal)` disables glob
+# interpretation so these paths match themselves exactly.
+literal_files=()
+for f in "${files[@]}"; do
+  literal_files+=(":(literal)$f")
+done
+
 {
   echo "# Review package (working tree, no commits): ${task_title}"
   echo
   echo "## Files"
-  git status --short -- "${files[@]}" || true
+  git status --short -- "${literal_files[@]}" || true
   echo
   for f in "${files[@]}"; do
     echo "## ${f}"
     echo
-    status_line=$(git status --short -- "$f" | head -1)
+    status_line=$(git status --short -- ":(literal)$f" | head -1)
     if [[ "$status_line" == \?\?* ]]; then
       # Fully untracked (never `git add`-ed) — nothing for `git diff HEAD` to
       # compare against, so embed the whole file instead.
@@ -81,7 +90,7 @@ cd "$repo_root"
       # the complete working-tree-vs-HEAD delta regardless of index state,
       # so it doesn't matter whether the user has since run `git add`.
       echo '```diff'
-      git diff HEAD -U10 -- "$f"
+      git diff HEAD -U10 -- ":(literal)$f"
       echo '```'
     fi
     echo
