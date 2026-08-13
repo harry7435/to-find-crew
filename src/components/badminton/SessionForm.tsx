@@ -49,7 +49,10 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        // datetime-local 값은 타임존 정보가 없는 로컬 시각 문자열이라, 브라우저의
+        // 로컬 타임존 기준으로 해석해 UTC로 변환한 뒤 전송해야 서버(UTC)에 잘못
+        // 저장되지 않는다.
+        body: JSON.stringify({ ...data, session_date: new Date(data.session_date).toISOString() }),
       });
 
       const result = await response.json();
