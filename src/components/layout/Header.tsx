@@ -11,8 +11,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
-import { Calendar, LogOut, User } from 'lucide-react';
+import { Calendar, LogOut, MessageCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
+
+const FEEDBACK_URL = 'https://open.kakao.com/o/s9oD9DIi';
 
 export default function Header() {
   const { user, loading, signOut } = useAuth();
@@ -52,6 +54,16 @@ export default function Header() {
         </Link>
 
         <div className="flex items-center gap-4">
+          <a
+            href={FEEDBACK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          >
+            <MessageCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">문의하기</span>
+          </a>
+
           {user ? (
             <>
               {/* 사용자 메뉴 */}
