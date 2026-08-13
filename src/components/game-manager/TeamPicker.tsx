@@ -13,6 +13,7 @@ interface TeamPickerProps {
   onConfirm: () => void;
   onReject: () => void;
   onCustomPick: () => void;
+  onCancelPick: () => void;
   onReorderPickedPlayers: (next: [Player, Player, Player, Player]) => void;
 }
 
@@ -24,6 +25,7 @@ export default function TeamPicker({
   onConfirm,
   onReject,
   onCustomPick,
+  onCancelPick,
   onReorderPickedPlayers,
 }: TeamPickerProps) {
   const activePlayers = players.filter((p) => p.status === 'active');
@@ -70,7 +72,7 @@ export default function TeamPicker({
         </AnimatePresence>
       </div>
 
-      {/* 확정 / 다시 뽑기 / 직접 선택 (모바일 전용 — PC/태블릿은 카드 헤더에 표시) */}
+      {/* 확정 / 다시 뽑기 / 직접 선택 / 취소 (모바일 전용 — PC/태블릿은 카드 헤더에 표시) */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -87,6 +89,9 @@ export default function TeamPicker({
         </div>
         <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full">
           직접 선택
+        </Button>
+        <Button variant="ghost" size="lg" onClick={onCancelPick} className="w-full text-gray-500">
+          취소
         </Button>
       </motion.div>
     </div>

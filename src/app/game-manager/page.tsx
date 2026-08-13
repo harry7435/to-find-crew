@@ -37,6 +37,7 @@ export default function GameManagerPage() {
     removeGame,
     resetPlayers,
     resetGames,
+    resetWaitingTimes,
     addCourt,
     removeCourt,
     renameCourt,
@@ -51,6 +52,7 @@ export default function GameManagerPage() {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
+  const [isEditingCustomPick, setIsEditingCustomPick] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
   const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
@@ -216,8 +218,13 @@ export default function GameManagerPage() {
     handleRandomPickTeams();
   }, [handleRandomPickTeams]);
 
+  const handleCancelPick = useCallback(() => {
+    setPickedPlayers(null);
+  }, []);
+
   const handleStartCustomPicking = useCallback(() => {
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
     setIsCustomPicking(true);
   }, []);
 
@@ -226,12 +233,14 @@ export default function GameManagerPage() {
     setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
     setIsCustomPicking(false);
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
   }, [selectedPlayers]);
 
   const handleCustomCancel = useCallback(() => {
     setIsCustomPicking(false);
     setPickedPlayers(null);
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
   }, []);
 
   const handleEditPlayer = useCallback((player: Player) => {
@@ -335,11 +344,12 @@ export default function GameManagerPage() {
       toast.error('삭제할 게임 기록이 없습니다');
       return;
     }
-    if (confirm('모든 게임 기록을 삭제하시겠습니까?')) {
+    if (confirm('모든 게임 기록을 삭제하시겠습니까?\n(대기 중인 선수의 대기 시간도 함께 초기화됩니다)')) {
       resetGames();
-      toast.success('게임 기록이 초기화되었습니다');
+      resetWaitingTimes();
+      toast.success('게임 기록과 대기 시간이 초기화되었습니다');
     }
-  }, [games.length, resetGames]);
+  }, [games.length, resetGames, resetWaitingTimes]);
 
   const handleResetPlayers = useCallback(() => {
     if (players.length === 0) {
@@ -501,6 +511,11 @@ export default function GameManagerPage() {
                         <Button size="sm" onClick={handleCustomConfirm} disabled={selectedPlayers.length !== 4}>
                           확정
                         </Button>
+                        {selectedPlayers.length === 4 && !isEditingCustomPick && (
+                          <Button size="sm" variant="outline" onClick={() => setIsEditingCustomPick(true)}>
+                            다시 선택
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={handleCustomCancel}>
                           취소
                         </Button>
@@ -516,6 +531,9 @@ export default function GameManagerPage() {
                           </Button>
                           <Button size="sm" variant="outline" onClick={handleStartCustomPicking}>
                             직접 선택
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleCancelPick}>
+                            취소
                           </Button>
                         </>
                       )
@@ -538,6 +556,8 @@ export default function GameManagerPage() {
                   onSelectedPlayersChange={setSelectedPlayers}
                   onConfirm={handleCustomConfirm}
                   onCancel={handleCustomCancel}
+                  isEditingSelection={isEditingCustomPick}
+                  onEditingSelectionChange={setIsEditingCustomPick}
                 />
               ) : (
                 <TeamPicker
@@ -548,6 +568,7 @@ export default function GameManagerPage() {
                   onConfirm={handleConfirmGame}
                   onReject={handleRejectPick}
                   onCustomPick={handleStartCustomPicking}
+                  onCancelPick={handleCancelPick}
                   onReorderPickedPlayers={setPickedPlayers}
                 />
               )}

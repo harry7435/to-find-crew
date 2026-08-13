@@ -135,20 +135,9 @@ export default function CourtManager({
                       <>
                         <span className="font-medium text-sm truncate">{court.name}</span>
                         {isActive ? (
-                          <>
-                            <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
-                              게임중
-                            </Badge>
-                            {court.gameStartedAt && (
-                              <Badge
-                                variant="outline"
-                                className="bg-blue-50 text-blue-700 border-blue-200 text-xs shrink-0"
-                              >
-                                <Clock className="h-3 w-3 mr-1" />
-                                {formatElapsed(court.gameStartedAt, now) ?? '방금'}
-                              </Badge>
-                            )}
-                          </>
+                          <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
+                            게임중
+                          </Badge>
                         ) : (
                           <Badge variant="outline" className="text-gray-500 text-xs shrink-0">
                             대기중
@@ -157,6 +146,12 @@ export default function CourtManager({
                       </>
                     )}
                   </div>
+                  {isActive && !isEditing && court.gameStartedAt && (
+                    <span className="shrink-0 ml-1 flex items-center gap-1 font-bold text-blue-600 tabular-nums text-lg">
+                      <Clock className="h-4 w-4" />
+                      {formatElapsed(court.gameStartedAt, now) ?? '방금'}
+                    </span>
+                  )}
                   {!isActive && !isEditing && (
                     <div className="flex gap-1 shrink-0 ml-1">
                       <Button

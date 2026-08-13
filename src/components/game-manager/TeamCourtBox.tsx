@@ -43,6 +43,12 @@ function getGenderIcon(gender?: 'male' | 'female'): string {
   return gender === 'male' ? '♂️' : '♀️';
 }
 
+function getGenderColor(gender?: 'male' | 'female'): string {
+  if (gender === 'male') return 'text-blue-600';
+  if (gender === 'female') return 'text-pink-600';
+  return 'text-gray-400';
+}
+
 function getPartnerCount(a: Player, b: Player, games: GameRecord[]): number {
   return games.filter((g) => g.players.includes(a.id) && g.players.includes(b.id)).length;
 }
@@ -54,6 +60,7 @@ function getGameCount(player: Player, games: GameRecord[]): number {
 function PlayerChip({
   player,
   size,
+  side,
   selected,
   interactive,
   gameCount,
@@ -61,6 +68,7 @@ function PlayerChip({
 }: {
   player: Player;
   size: BoxSize;
+  side: 'a' | 'b';
   selected: boolean;
   interactive: boolean;
   gameCount?: number;
@@ -68,15 +76,19 @@ function PlayerChip({
 }) {
   const isDetailed = size !== 'compact';
   const isHero = size === 'hero';
+  const sideBorder = side === 'a' ? 'border-blue-200' : 'border-violet-200';
+  const genderColor = getGenderColor(player.gender);
 
   const content = (
     <>
       <div className={`flex items-center justify-center min-w-0 ${isHero ? 'gap-1.5' : 'gap-1'}`}>
         {isDetailed && (
-          <span className={`shrink-0 ${isHero ? 'text-lg' : 'text-sm'}`}>{getGenderIcon(player.gender)}</span>
+          <span className={`shrink-0 ${genderColor} ${isHero ? 'text-lg' : 'text-sm'}`}>
+            {getGenderIcon(player.gender)}
+          </span>
         )}
         <span
-          className={`font-medium truncate ${isHero ? 'text-base font-semibold' : isDetailed ? 'text-sm' : 'text-xs'}`}
+          className={`font-medium truncate ${genderColor} ${isHero ? 'text-base font-semibold' : isDetailed ? 'text-sm' : 'text-xs'}`}
         >
           {player.name}
         </span>
@@ -105,7 +117,7 @@ function PlayerChip({
   const className = `flex flex-col items-center justify-center rounded-lg border w-full min-w-0 text-center transition-colors ${
     isHero ? 'gap-1 py-3.5 px-3' : isDetailed ? 'gap-0.5 py-2 px-2' : 'gap-0.5 py-1 px-1.5'
   } ${
-    selected ? 'border-blue-400 ring-2 ring-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
+    selected ? 'border-blue-400 ring-2 ring-blue-400 bg-blue-50' : `${sideBorder} bg-white`
   } ${interactive ? 'cursor-pointer hover:bg-blue-50' : ''}`;
 
   if (!interactive) {
@@ -149,14 +161,15 @@ export default function TeamCourtBox({
   const isHero = size === 'hero';
   const padding = isHero ? 'p-3' : size === 'full' ? 'p-2' : 'p-1.5';
 
-  const renderSide = (indices: [number, number]) => (
-    <div className={`flex-1 min-w-0 ${padding}`}>
+  const renderSide = (indices: [number, number], side: 'a' | 'b') => (
+    <div className={`flex-1 min-w-0 ${padding} ${side === 'a' ? 'bg-blue-50' : 'bg-violet-50'}`}>
       <div className={`flex flex-col ${isHero ? 'gap-2' : 'gap-1'}`}>
         {indices.map((i) => (
           <PlayerChip
             key={players[i].id}
             player={players[i]}
             size={size}
+            side={side}
             selected={selectedIndex === i}
             interactive={interactive}
             gameCount={size !== 'compact' ? getGameCount(players[i], games) : undefined}
@@ -173,10 +186,10 @@ export default function TeamCourtBox({
   );
 
   return (
-    <div className={`border overflow-hidden bg-gray-50 flex ${isHero ? 'rounded-xl' : 'rounded-lg'}`}>
-      {renderSide([0, 1])}
+    <div className={`border overflow-hidden flex ${isHero ? 'rounded-xl' : 'rounded-lg'}`}>
+      {renderSide([0, 1], 'a')}
       <div className={`w-0 border-dashed border-gray-300 ${isHero ? 'border-l-[3px]' : 'border-l-2'}`} />
-      {renderSide([2, 3])}
+      {renderSide([2, 3], 'b')}
     </div>
   );
 }

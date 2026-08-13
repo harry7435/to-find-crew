@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Player } from '@/hooks/useGameManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
 
 export type AttendanceFilter = 'all' | 'attending' | 'absent';
+type SortOption = 'name' | 'wait' | 'game';
 
 interface PlayerListProps {
   players: Player[];
@@ -46,6 +48,12 @@ function getGenderIcon(gender?: 'male' | 'female'): string {
   return gender === 'male' ? '♂️' : '♀️';
 }
 
+function getGenderColor(gender?: 'male' | 'female'): string {
+  if (gender === 'male') return 'text-blue-600';
+  if (gender === 'female') return 'text-pink-600';
+  return 'text-gray-400';
+}
+
 function getAgeGroupLabel(ageGroup?: string): string | null {
   if (!ageGroup) return null;
   return ageGroup === '60s+' ? '60대+' : ageGroup.replace('s', '대');
@@ -64,9 +72,13 @@ export default function PlayerList({
   gameCountsMap,
 }: PlayerListProps) {
   const now = useTicker();
+  const [sort, setSort] = useState<SortOption>('name');
 
   const attendingCount = players.filter((p) => p.attending).length;
   const absentCount = players.length - attendingCount;
+  const waitingCount = players.filter((p) => p.attending && p.status === 'active').length;
+  const playingCount = players.filter((p) => p.attending && p.status === 'playing').length;
+  const queuedCount = players.filter((p) => p.attending && p.status === 'queued').length;
 
   const filteredPlayers = players.filter((p) => {
     if (filter === 'attending') return p.attending === true;
@@ -74,11 +86,39 @@ export default function PlayerList({
     return true;
   });
 
-  const sortedPlayers = [...filteredPlayers].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const sortedPlayers = [...filteredPlayers].sort((a, b) => {
+    if (sort === 'wait') {
+      const aT = a.waitingSince ? new Date(a.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+      const bT = b.waitingSince ? new Date(b.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+      if (aT !== bT) return aT - bT;
+      return a.name.localeCompare(b.name, 'ko');
+    }
+    if (sort === 'game') {
+      const aCount = gameCountsMap?.get(a.id) || 0;
+      const bCount = gameCountsMap?.get(b.id) || 0;
+      if (aCount !== bCount) return aCount - bCount;
+      return a.name.localeCompare(b.name, 'ko');
+    }
+    return a.name.localeCompare(b.name, 'ko');
+  });
 
   return (
     <div className="flex flex-col gap-3 md:h-full md:min-h-0">
       {/* 상단 컨트롤 (고정) */}
+      <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span>
+          대기중 <b className="text-blue-600 font-semibold">{waitingCount}명</b>
+        </span>
+        <span>
+          게임중 <b className="text-gray-900 font-semibold">{playingCount}명</b>
+        </span>
+        {queuedCount > 0 && (
+          <span>
+            대기열 <b className="text-purple-600 font-semibold">{queuedCount}명</b>
+          </span>
+        )}
+      </div>
+
       <div className="shrink-0 flex flex-wrap items-center gap-2">
         <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
           {(['all', 'attending', 'absent'] as const).map((f) => (
@@ -101,6 +141,29 @@ export default function PlayerList({
           <ListChecks className="h-3.5 w-3.5 mr-1" />
           오늘 참석자 선택
         </Button>
+      </div>
+
+      <div className="shrink-0 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-gray-400 font-medium">정렬</span>
+        <div className="flex rounded-md border border-gray-200 overflow-hidden">
+          {(
+            [
+              ['name', '가나다순'],
+              ['wait', '대기시간순'],
+              ['game', '게임수순'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setSort(value)}
+              className={`px-3 py-1.5 transition-colors ${
+                sort === value ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {players.length === 0 ? (
@@ -146,10 +209,16 @@ export default function PlayerList({
                     className="h-4 w-4 shrink-0 accent-blue-600"
                     title={isAttending ? '오늘 참석 해제' : '오늘 참석 체크'}
                   />
-                  <span className="text-xl shrink-0">{getGenderIcon(player.gender)}</span>
+                  <span className={`text-xl shrink-0 ${getGenderColor(player.gender)}`}>
+                    {getGenderIcon(player.gender)}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`font-medium ${!isAttending || isResting ? 'text-gray-500' : ''}`}>
+                      <span
+                        className={`font-medium ${
+                          !isAttending || isResting ? 'text-gray-500' : getGenderColor(player.gender)
+                        }`}
+                      >
                         {player.name}
                       </span>
                       {player.skillLevel && (

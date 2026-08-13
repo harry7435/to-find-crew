@@ -52,6 +52,7 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
 
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
+  const [isEditingCustomPick, setIsEditingCustomPick] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const [isAddingCourt, setIsAddingCourt] = useState(false);
@@ -118,6 +119,10 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     setIsCustomPicking(false);
   }, [pickedPlayers, enqueueGame]);
 
+  const handleCancelPick = useCallback(() => {
+    setPickedPlayers(null);
+  }, []);
+
   const handleAssignQueueToCourt = useCallback(
     (queueItemId: string, courtId: string) => {
       assignQueueToCourt(queueItemId, courtId);
@@ -175,6 +180,7 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
 
   const handleStartCustomPicking = useCallback(() => {
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
     setIsCustomPicking(true);
   }, []);
 
@@ -183,12 +189,14 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
     setIsCustomPicking(false);
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
   }, [selectedPlayers]);
 
   const handleCustomCancel = useCallback(() => {
     setIsCustomPicking(false);
     setPickedPlayers(null);
     setSelectedPlayers([]);
+    setIsEditingCustomPick(false);
   }, []);
 
   const handleEditPlayer = useCallback((player: Player) => setEditingPlayer(player), []);
@@ -268,11 +276,12 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
       toast.error('삭제할 게임 기록이 없습니다');
       return;
     }
-    if (confirm('모든 게임 기록을 삭제하시겠습니까?')) {
+    if (confirm('모든 게임 기록을 삭제하시겠습니까?\n(대기 중인 선수의 대기 시간도 함께 초기화됩니다)')) {
       resetGames();
-      toast.success('게임 기록이 초기화되었습니다');
+      resetWaitingTimes();
+      toast.success('게임 기록과 대기 시간이 초기화되었습니다');
     }
-  }, [games.length, resetGames]);
+  }, [games.length, resetGames, resetWaitingTimes]);
 
   const handleResetPlayers = useCallback(() => {
     if (players.length === 0) {
@@ -318,11 +327,6 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
     );
   }
 
-  const attendingCount = players.filter((p) => p.attending).length;
-  const activeCount = players.filter((p) => p.status === 'active').length;
-  const playingCount = players.filter((p) => p.status === 'playing').length;
-  const queuedCount = players.filter((p) => p.status === 'queued').length;
-
   return (
     <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
       <div className="shrink-0 flex justify-end">
@@ -356,6 +360,11 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                     <Button size="sm" onClick={handleCustomConfirm} disabled={selectedPlayers.length !== 4}>
                       확정
                     </Button>
+                    {selectedPlayers.length === 4 && !isEditingCustomPick && (
+                      <Button size="sm" variant="outline" onClick={() => setIsEditingCustomPick(true)}>
+                        다시 선택
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={handleCustomCancel}>
                       취소
                     </Button>
@@ -372,6 +381,9 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                       <Button size="sm" variant="outline" onClick={handleStartCustomPicking}>
                         직접 선택
                       </Button>
+                      <Button size="sm" variant="outline" onClick={handleCancelPick}>
+                        취소
+                      </Button>
                     </>
                   )
                 )}
@@ -379,17 +391,6 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
             </div>
 
             <TabsContent value="pool" className="flex-none px-6 pb-6 md:flex md:flex-col md:flex-1 md:min-h-0">
-              <p className="shrink-0 text-sm text-gray-500 -mt-1 mb-2">
-                참석 {attendingCount}/{players.length}명
-                {(activeCount > 0 || playingCount > 0 || queuedCount > 0) && (
-                  <>
-                    {' '}
-                    (활성: {activeCount}
-                    {playingCount > 0 && <> · 게임중: {playingCount}</>}
-                    {queuedCount > 0 && <> · 대기열: {queuedCount}</>})
-                  </>
-                )}
-              </p>
               <PlayerList
                 players={players}
                 onRemovePlayer={handleRemovePlayer}
@@ -413,6 +414,8 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                   onSelectedPlayersChange={setSelectedPlayers}
                   onConfirm={handleCustomConfirm}
                   onCancel={handleCustomCancel}
+                  isEditingSelection={isEditingCustomPick}
+                  onEditingSelectionChange={setIsEditingCustomPick}
                   boundedOnDesktop
                 />
               ) : (
@@ -424,6 +427,7 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
                   onConfirm={handleConfirmGame}
                   onReject={handleRandomPickTeams}
                   onCustomPick={handleStartCustomPicking}
+                  onCancelPick={handleCancelPick}
                   onReorderPickedPlayers={setPickedPlayers}
                 />
               )}

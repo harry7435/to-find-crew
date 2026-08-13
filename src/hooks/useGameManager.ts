@@ -244,6 +244,11 @@ export function useGameManager() {
     setGames([]);
   }, []);
 
+  const resetWaitingTimes = useCallback(() => {
+    const nowIso = new Date().toISOString();
+    setPlayers((prev) => prev.map((p) => (p.status === 'active' ? { ...p, waitingSince: nowIso } : p)));
+  }, []);
+
   const addCourt = useCallback((name: string) => {
     const newCourt: Court = {
       id: crypto.randomUUID(),
@@ -380,6 +385,7 @@ export function useGameManager() {
     removeGame,
     resetPlayers,
     resetGames,
+    resetWaitingTimes,
     addCourt,
     removeCourt,
     renameCourt,
