@@ -135,6 +135,32 @@ export default function EditSessionPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm('정말 이 번개 모임을 삭제하시겠습니까?\n(삭제 후 되돌릴 수 없습니다)')) return;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/badminton/sessions/${sessionId}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete session');
+      }
+
+      toast.success('번개 모임이 삭제되었습니다');
+      router.push('/badminton/my-sessions');
+    } catch (error) {
+      console.error('Session delete error:', error);
+      toast.error('번개 모임 삭제에 실패했습니다', {
+        description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
+      });
+      setIsSaving(false);
+    }
+  };
+
   // 현재 시간 이후로만 선택 가능하도록 min 값 설정
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -295,6 +321,23 @@ export default function EditSessionPage() {
               onOrganizersChanged={fetchSession}
             />
           </div>
+        )}
+
+        {/* 모임 삭제는 생성자만 가능 (공동 운영진 포함하지 않음) */}
+        {session && user?.id === session.creator_id && (
+          <Card className="mt-6 border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-destructive text-base">위험 구역</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">
+                모임을 삭제하면 참가자, 팀, 게임 기록이 모두 함께 삭제되며 되돌릴 수 없습니다.
+              </p>
+              <Button variant="destructive" onClick={handleDelete} disabled={isSaving}>
+                모임 삭제
+              </Button>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AuthGuard>
