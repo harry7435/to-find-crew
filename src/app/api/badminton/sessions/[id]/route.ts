@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server';
+import { isSessionOrganizer } from '@/lib/session-organizer';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         ),
         session_participants(
           id,
+          user_id,
           joined_at,
           games_played,
           user:users(
@@ -29,6 +31,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             profile_image,
             gender,
             skill_level
+          )
+        ),
+        session_organizers(
+          user_id,
+          user:users!user_id(
+            id,
+            name,
+            profile_image
           )
         ),
         guest_participants(
@@ -115,8 +125,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    if (session.creator_id !== user.id) {
-      return NextResponse.json({ error: 'Only session creator can update' }, { status: 403 });
+    const isOrganizer = await isSessionOrganizer(supabase, sessionId, user.id, session.creator_id);
+    if (!isOrganizer) {
+      return NextResponse.json({ error: 'Only session organizers can update' }, { status: 403 });
     }
 
     // 허용된 필드만 업데이트

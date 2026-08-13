@@ -528,3 +528,121 @@ ALTER TABLE courts REPLICA IDENTITY FULL;
 ALTER TABLE board_games REPLICA IDENTITY FULL;
 ALTER TABLE guest_participants REPLICA IDENTITY FULL;
 ALTER TABLE session_participants REPLICA IDENTITY FULL;
+
+-- ============================================================
+-- Multi-organizer support (세션 다중 운영진, additive only)
+-- ============================================================
+
+CREATE TABLE session_organizers (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  granted_by UUID NOT NULL REFERENCES users(id),
+  granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, user_id)
+);
+
+CREATE INDEX idx_session_organizers_session_id ON session_organizers(session_id);
+
+ALTER TABLE session_organizers ENABLE ROW LEVEL SECURITY;
+
+-- 생성자 OR 운영진 여부를 하나의 함수로 통일
+CREATE OR REPLACE FUNCTION is_session_organizer(p_session_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM badminton_sessions bs
+    WHERE bs.id = p_session_id AND bs.creator_id::text = auth.uid()::text
+  ) OR EXISTS (
+    SELECT 1 FROM session_organizers so
+    WHERE so.session_id = p_session_id AND so.user_id::text = auth.uid()::text
+  );
+$$;
+
+-- 기존 "생성자만" 정책 10개를 "생성자 OR 운영진"으로 교체
+-- (badminton_sessions의 DELETE 정책은 생성자 전용 유지, 변경하지 않음)
+
+-- badminton_sessions UPDATE 정책의 WITH CHECK에서 "수정 전 creator_id"를 읽기 위한 헬퍼.
+-- 정책이 자기 테이블을 직접 서브쿼리하면 재귀 문제가 생길 수 있어 STABLE 함수로 감싼다.
+CREATE OR REPLACE FUNCTION session_creator_id(p_session_id UUID)
+RETURNS UUID
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT creator_id FROM badminton_sessions WHERE id = p_session_id;
+$$;
+
+DROP POLICY IF EXISTS "Only session creators can update sessions" ON badminton_sessions;
+CREATE POLICY "Session organizers can update sessions" ON badminton_sessions
+  FOR UPDATE
+  USING (is_session_organizer(id))
+  WITH CHECK (is_session_organizer(id) AND creator_id = session_creator_id(id));
+
+DROP POLICY IF EXISTS "Session creators can manage participants" ON session_participants;
+CREATE POLICY "Session organizers can manage participants" ON session_participants FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can manage guest participants" ON guest_participants;
+CREATE POLICY "Session organizers can manage guest participants" ON guest_participants FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can manage teams" ON teams;
+CREATE POLICY "Session organizers can manage teams" ON teams FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can manage team members" ON team_members;
+CREATE POLICY "Session organizers can manage team members" ON team_members FOR ALL USING (
+  is_session_organizer((SELECT session_id FROM teams WHERE id = team_members.team_id))
+);
+
+DROP POLICY IF EXISTS "Session creators can manage games" ON games;
+CREATE POLICY "Session organizers can manage games" ON games FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can update board player state" ON board_player_state;
+CREATE POLICY "Session organizers can update board player state" ON board_player_state FOR UPDATE USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can delete board player state" ON board_player_state;
+CREATE POLICY "Session organizers can delete board player state" ON board_player_state FOR DELETE USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can manage courts" ON courts;
+CREATE POLICY "Session organizers can manage courts" ON courts FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+DROP POLICY IF EXISTS "Session creators can manage board games" ON board_games;
+CREATE POLICY "Session organizers can manage board games" ON board_games FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+-- session_organizers 자체의 RLS
+CREATE POLICY "Anyone can read session organizers" ON session_organizers
+  FOR SELECT USING (true);
+
+CREATE POLICY "Organizers can grant organizer status" ON session_organizers
+  FOR INSERT WITH CHECK (
+    is_session_organizer(session_id)
+    AND granted_by::text = auth.uid()::text
+    AND EXISTS (
+      SELECT 1 FROM session_participants sp
+      WHERE sp.session_id = session_organizers.session_id
+        AND sp.user_id = session_organizers.user_id
+    )
+  );
+
+CREATE POLICY "Organizers can revoke organizer status" ON session_organizers
+  FOR DELETE USING (is_session_organizer(session_id));
+
+-- Realtime 활성화
+ALTER PUBLICATION supabase_realtime ADD TABLE session_organizers;
+ALTER TABLE session_organizers REPLICA IDENTITY FULL;

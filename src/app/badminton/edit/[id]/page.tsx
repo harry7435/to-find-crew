@@ -14,6 +14,9 @@ import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useAuth } from '@/contexts/AuthContext';
+import { BadmintonSession } from '@/types/badminton';
+import OrganizerManagementSection from '@/components/badminton/OrganizerManagementSection';
 
 const sessionSchema = z.object({
   name: z.string().min(2, '번개 모임 이름은 최소 2자 이상이어야 합니다'),
@@ -41,6 +44,8 @@ export default function EditSessionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const [session, setSession] = useState<BadmintonSession | null>(null);
 
   const {
     register,
@@ -64,6 +69,7 @@ export default function EditSessionPage() {
       }
 
       const session = result.session;
+      setSession(session);
 
       // 폼에 데이터 채우기
       setValue('name', session.name);
@@ -83,6 +89,19 @@ export default function EditSessionPage() {
   useEffect(() => {
     fetchSession();
   }, [fetchSession]);
+
+  const isOrganizer =
+    !!user &&
+    !!session &&
+    (user.id === session.creator_id || (session.session_organizers ?? []).some((o) => o.user_id === user.id));
+
+  useEffect(() => {
+    if (authLoading || isLoading || !session) return;
+    if (!isOrganizer) {
+      toast.error('운영진만 접근할 수 있습니다');
+      router.replace(`/badminton/${sessionId}`);
+    }
+  }, [authLoading, isLoading, session, isOrganizer, sessionId, router]);
 
   const onSubmit = async (data: SessionFormData) => {
     setIsSaving(true);
@@ -144,6 +163,10 @@ export default function EditSessionPage() {
         </div>
       </AuthGuard>
     );
+  }
+
+  if (!authLoading && session && !isOrganizer) {
+    return null; // 리디렉트 중이므로 아무것도 렌더링하지 않음
   }
 
   return (
@@ -257,6 +280,19 @@ export default function EditSessionPage() {
             </form>
           </CardContent>
         </Card>
+
+        {session && (
+          <div className="mt-6">
+            <OrganizerManagementSection
+              sessionId={sessionId}
+              creatorId={session.creator_id}
+              creatorName={session.creator?.name ?? '생성자'}
+              participants={session.session_participants ?? []}
+              organizers={session.session_organizers ?? []}
+              onOrganizersChanged={fetchSession}
+            />
+          </div>
+        )}
       </div>
     </AuthGuard>
   );

@@ -15,8 +15,20 @@ export async function GET() {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // 사용자가 생성한 세션 목록 조회
-    const { data: sessions, error: sessionsError } = await supabase
+    // 내가 운영진으로 지정된 세션 id 목록 (생성자 본인 세션은 여기 들어있지 않음)
+    const { data: organizerRows, error: organizerError } = await supabase
+      .from('session_organizers')
+      .select('session_id')
+      .eq('user_id', user.id);
+
+    if (organizerError) {
+      throw organizerError;
+    }
+
+    const organizerSessionIds = (organizerRows ?? []).map((row) => row.session_id);
+
+    // 내가 생성했거나 운영진으로 지정된 세션 목록 조회
+    let sessionsQuery = supabase
       .from('badminton_sessions')
       .select(
         `
@@ -26,8 +38,14 @@ export async function GET() {
         guest_participants(id)
       `,
       )
-      .eq('creator_id', user.id)
       .order('session_date', { ascending: false });
+
+    sessionsQuery =
+      organizerSessionIds.length > 0
+        ? sessionsQuery.or(`creator_id.eq.${user.id},id.in.(${organizerSessionIds.join(',')})`)
+        : sessionsQuery.eq('creator_id', user.id);
+
+    const { data: sessions, error: sessionsError } = await sessionsQuery;
 
     if (sessionsError) {
       throw sessionsError;

@@ -85,6 +85,11 @@ export default function SessionDetailPage() {
         { event: '*', schema: 'public', table: 'session_participants', filter: `session_id=eq.${sessionId}` },
         () => fetchSession(),
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'session_organizers', filter: `session_id=eq.${sessionId}` },
+        () => fetchSession(),
+      )
       .subscribe();
 
     return () => {
@@ -230,7 +235,8 @@ export default function SessionDetailPage() {
     minute: '2-digit',
   });
 
-  const isOrganizer = user?.id === session.creator_id;
+  const isCreator = user?.id === session.creator_id;
+  const isOrganizer = isCreator || (!!user && (session.session_organizers ?? []).some((o) => o.user_id === user.id));
 
   return (
     <>
@@ -278,7 +284,7 @@ export default function SessionDetailPage() {
               <Copy className="h-3.5 w-3.5 mr-1" />
               {session.access_code}
             </Button>
-            {user && session.creator_id === user.id && (
+            {isOrganizer && (
               <Link href={`/badminton/edit/${session.id}`}>
                 <Button variant="outline" size="sm" className="cursor-pointer text-xs">
                   <Settings className="h-3.5 w-3.5 mr-1" />

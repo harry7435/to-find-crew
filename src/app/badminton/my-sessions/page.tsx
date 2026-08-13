@@ -8,6 +8,7 @@ import AuthGuard from '@/components/auth/AuthGuard';
 import { ArrowLeft, Calendar, MapPin, Users, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Session {
   id: string;
@@ -19,9 +20,11 @@ interface Session {
   court_count: number;
   participant_count: number;
   created_at: string;
+  creator: { id: string; name: string; email: string };
 }
 
 export default function MySessionsPage() {
+  const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +109,8 @@ export default function MySessionsPage() {
 
         {/* 타이틀 */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold">내가 만든 모임</h1>
-          <p className="text-gray-600 mt-2">내가 생성한 배드민턴 번개 모임 목록입니다</p>
+          <h1 className="text-3xl font-bold">내 모임</h1>
+          <p className="text-gray-600 mt-2">내가 생성했거나 운영진으로 참여 중인 배드민턴 번개 모임 목록입니다</p>
         </div>
 
         {/* 오류 메시지 */}
@@ -125,7 +128,7 @@ export default function MySessionsPage() {
             <CardContent className="py-12">
               <div className="text-center">
                 <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-600 mb-4">아직 만든 모임이 없습니다</p>
+                <p className="text-gray-600 mb-4">아직 참여 중인 모임이 없습니다</p>
                 <Link href="/badminton/create">
                   <Button className="cursor-pointer">
                     <Plus className="h-4 w-4 mr-2" />첫 번째 모임 만들기
@@ -148,6 +151,7 @@ export default function MySessionsPage() {
                           <span className="text-sm text-gray-500">
                             {session.participant_count}/{session.max_participants}명 참가
                           </span>
+                          {user && session.creator?.id !== user.id && <Badge variant="outline">운영진</Badge>}
                         </div>
                       </div>
                     </div>

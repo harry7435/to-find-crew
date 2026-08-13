@@ -1,3 +1,12 @@
+export interface SessionOrganizer {
+  user_id: string;
+  user: {
+    id: string;
+    name: string;
+    profile_image?: string;
+  };
+}
+
 export interface BadmintonSession {
   id: string;
   name: string;
@@ -19,6 +28,7 @@ export interface BadmintonSession {
   session_participants?: SessionParticipant[];
   guest_participants?: GuestParticipant[];
   teams?: Team[];
+  session_organizers?: SessionOrganizer[];
 }
 
 export interface SessionParticipant {

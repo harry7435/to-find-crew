@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
+import { isSessionOrganizer } from '@/lib/session-organizer';
 
 type SessionStatus = 'open' | 'in_progress' | 'completed';
 
@@ -7,7 +8,7 @@ const VALID_STATUSES: SessionStatus[] = ['open', 'in_progress', 'completed'];
 
 const ERROR_MESSAGES = {
   INVALID_STATUS: 'Invalid status value',
-  NOT_CREATOR: 'Only the creator can update session status',
+  NOT_ORGANIZER: 'Only session organizers can update session status',
 } as const;
 
 const isValidStatus = (status: string): status is SessionStatus => {
@@ -51,9 +52,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    // 생성자만 상태를 변경할 수 있음
-    if (session.creator_id !== user.id) {
-      return NextResponse.json({ error: ERROR_MESSAGES.NOT_CREATOR }, { status: 403 });
+    // 생성자 또는 운영진만 상태를 변경할 수 있음
+    const isOrganizer = await isSessionOrganizer(supabase, session_id, user.id, session.creator_id);
+    if (!isOrganizer) {
+      return NextResponse.json({ error: ERROR_MESSAGES.NOT_ORGANIZER }, { status: 403 });
     }
 
     // 세션 상태 업데이트

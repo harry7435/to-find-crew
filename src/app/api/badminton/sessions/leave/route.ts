@@ -83,6 +83,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to leave session' }, { status: 500 });
     }
 
+    // 나간 세션의 "유령 운영진"으로 남지 않도록, 운영진이었다면 자격도 함께 정리한다
+    const { error: organizerCleanupError } = await supabase
+      .from('session_organizers')
+      .delete()
+      .eq('session_id', body.session_id)
+      .eq('user_id', user.id);
+
+    if (organizerCleanupError) {
+      console.error('Organizer cleanup on leave error:', organizerCleanupError);
+      // 참가 취소 자체는 이미 성공했으므로 실패로 처리하지 않는다
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Successfully left the session',
