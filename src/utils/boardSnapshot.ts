@@ -32,6 +32,14 @@ export interface RawGuestParticipant {
   age_group: string;
 }
 
+export interface RawParticipantOverride {
+  session_participant_id: string;
+  name: string | null;
+  gender: string | null;
+  skill_level: number | null;
+  age_group: string | null;
+}
+
 function toPlayer(
   participantId: string,
   type: 'user' | 'guest',
@@ -55,6 +63,7 @@ function toPlayer(
 export interface BoardSnapshotInput {
   participants: RawSessionParticipant[];
   guests: RawGuestParticipant[];
+  overrides: RawParticipantOverride[];
   states: BoardPlayerStateRow[];
   courtRows: CourtRow[];
   gameRows: BoardGameRow[];
@@ -70,6 +79,7 @@ export interface BoardSnapshot {
 export function buildSnapshot({
   participants,
   guests,
+  overrides,
   states,
   courtRows,
   gameRows,
@@ -80,9 +90,21 @@ export function buildSnapshot({
   const stateByGp = new Map(
     states.filter((s) => s.guest_participant_id).map((s) => [s.guest_participant_id as string, s]),
   );
+  const overrideBySp = new Map(overrides.map((o) => [o.session_participant_id, o]));
 
   const players: Player[] = [
-    ...participants.filter((p) => p.user).map((p) => toPlayer(p.id, 'user', p.user!, stateBySp.get(p.id))),
+    ...participants
+      .filter((p) => p.user)
+      .map((p) => {
+        const override = overrideBySp.get(p.id);
+        const info = {
+          name: override?.name ?? p.user!.name,
+          gender: override?.gender ?? p.user!.gender,
+          skill_level: override?.skill_level ?? p.user!.skill_level,
+          age_group: override?.age_group ?? undefined,
+        };
+        return toPlayer(p.id, 'user', info, stateBySp.get(p.id));
+      }),
     ...guests.map((g) => toPlayer(g.id, 'guest', g, stateByGp.get(g.id))),
   ];
 

@@ -646,3 +646,37 @@ CREATE POLICY "Organizers can revoke organizer status" ON session_organizers
 -- Realtime 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE session_organizers;
 ALTER TABLE session_organizers REPLICA IDENTITY FULL;
+
+-- ============================================================
+-- Session-scoped display overrides for logged-in participants
+-- (로그인 참가자의 세션 내 표시정보 오버라이드, additive only)
+-- ============================================================
+
+-- 로그인 참가자(session_participants)의 이름/성별/급수/나이대를 이 세션에서만 다르게
+-- 표시하기 위한 테이블. users(프로필) 원본은 건드리지 않고, 값이 없는 컬럼은
+-- 조회 시 프로필 값으로 폴백한다. session_participants가 세션마다 새 row이므로
+-- 이 테이블도 자연히 "이 세션에서만" 범위가 된다.
+CREATE TABLE session_participant_overrides (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  session_participant_id UUID NOT NULL REFERENCES session_participants(id) ON DELETE CASCADE,
+  name TEXT,
+  gender TEXT CHECK (gender IN ('male', 'female')),
+  skill_level INTEGER CHECK (skill_level BETWEEN 0 AND 5),
+  age_group TEXT CHECK (age_group IN ('10s', '20s', '30s', '40s', '50s', '60s')),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  UNIQUE (session_participant_id)
+);
+
+CREATE INDEX idx_session_participant_overrides_session_id ON session_participant_overrides(session_id);
+
+ALTER TABLE session_participant_overrides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read session participant overrides" ON session_participant_overrides FOR SELECT USING (true);
+CREATE POLICY "Session organizers can manage session participant overrides" ON session_participant_overrides FOR ALL USING (
+  is_session_organizer(session_id)
+);
+
+-- Realtime 활성화 + DELETE 이벤트에도 session_id가 실리도록 REPLICA IDENTITY FULL
+ALTER PUBLICATION supabase_realtime ADD TABLE session_participant_overrides;
+ALTER TABLE session_participant_overrides REPLICA IDENTITY FULL;

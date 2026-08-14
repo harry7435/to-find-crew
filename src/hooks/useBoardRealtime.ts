@@ -8,6 +8,7 @@ import {
   SKILL_LEVEL_TO_NUMBER,
   type RawSessionParticipant,
   type RawGuestParticipant,
+  type RawParticipantOverride,
 } from '@/utils/boardSnapshot';
 
 async function updatePlayerState(
@@ -33,6 +34,7 @@ export function useBoardRealtime(sessionId: string) {
     const [
       { data: sessionParticipants },
       { data: guestParticipants },
+      { data: overrideRows },
       { data: stateRows },
       { data: courtRows },
       { data: gameRows },
@@ -45,6 +47,10 @@ export function useBoardRealtime(sessionId: string) {
         .from('guest_participants')
         .select('id, name, gender, skill_level, age_group')
         .eq('session_id', sessionId),
+      supabase
+        .from('session_participant_overrides')
+        .select('session_participant_id, name, gender, skill_level, age_group')
+        .eq('session_id', sessionId),
       supabase.from('board_player_state').select('*').eq('session_id', sessionId),
       supabase.from('courts').select('*').eq('session_id', sessionId).order('sort_order', { ascending: true }),
       supabase.from('board_games').select('*').eq('session_id', sessionId),
@@ -52,6 +58,7 @@ export function useBoardRealtime(sessionId: string) {
 
     const participants = (sessionParticipants ?? []) as unknown as RawSessionParticipant[];
     const guests = (guestParticipants ?? []) as RawGuestParticipant[];
+    const overrides = (overrideRows ?? []) as RawParticipantOverride[];
     const existingStates = (stateRows ?? []) as BoardPlayerStateRow[];
 
     const existingSpIds = new Set(
@@ -82,6 +89,7 @@ export function useBoardRealtime(sessionId: string) {
     const snapshot = buildSnapshot({
       participants,
       guests,
+      overrides,
       states: allStates,
       courtRows: (courtRows ?? []) as CourtRow[],
       gameRows: (gameRows ?? []) as BoardGameRow[],
@@ -124,6 +132,16 @@ export function useBoardRealtime(sessionId: string) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'session_participants', filter: `session_id=eq.${sessionId}` },
+        () => loadSnapshot(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'session_participant_overrides',
+          filter: `session_id=eq.${sessionId}`,
+        },
         () => loadSnapshot(),
       )
       .subscribe((status) => {
@@ -213,7 +231,19 @@ export function useBoardRealtime(sessionId: string) {
       if (Object.keys(profileUpdates).length > 0) {
         const player = playersRef.current.find((p) => p.id === id);
         if (player?.participantType === 'user') {
-          toast.error('로그인 참가자 정보는 여기서 수정할 수 없습니다');
+          const overrideFields: Record<string, unknown> = {};
+          if (updates.name !== undefined) overrideFields.name = updates.name;
+          if (updates.gender !== undefined) overrideFields.gender = updates.gender;
+          if (updates.skillLevel !== undefined) overrideFields.skill_level = SKILL_LEVEL_TO_NUMBER[updates.skillLevel];
+          if (updates.ageGroup !== undefined) {
+            overrideFields.age_group = updates.ageGroup === '60s+' ? '60s' : updates.ageGroup;
+          }
+          await supabase
+            .from('session_participant_overrides')
+            .upsert(
+              { session_id: sessionId, session_participant_id: id, ...overrideFields },
+              { onConflict: 'session_participant_id' },
+            );
         } else {
           await supabase.from('guest_participants').update(profileUpdates).eq('id', id);
         }
@@ -221,7 +251,7 @@ export function useBoardRealtime(sessionId: string) {
 
       await loadSnapshot();
     },
-    [loadSnapshot],
+    [sessionId, loadSnapshot],
   );
 
   const setAttending = useCallback(

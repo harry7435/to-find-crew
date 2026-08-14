@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
-import { buildSnapshot, type RawSessionParticipant, type RawGuestParticipant } from '@/utils/boardSnapshot';
+import {
+  buildSnapshot,
+  type RawSessionParticipant,
+  type RawGuestParticipant,
+  type RawParticipantOverride,
+} from '@/utils/boardSnapshot';
 
 export function useBoardSpectator(sessionId: string) {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -15,6 +20,7 @@ export function useBoardSpectator(sessionId: string) {
     const [
       { data: sessionParticipants },
       { data: guestParticipants },
+      { data: overrideRows },
       { data: stateRows },
       { data: courtRows },
       { data: gameRows },
@@ -27,6 +33,10 @@ export function useBoardSpectator(sessionId: string) {
         .from('guest_participants')
         .select('id, name, gender, skill_level, age_group')
         .eq('session_id', sessionId),
+      supabase
+        .from('session_participant_overrides')
+        .select('session_participant_id, name, gender, skill_level, age_group')
+        .eq('session_id', sessionId),
       supabase.from('board_player_state').select('*').eq('session_id', sessionId),
       supabase.from('courts').select('*').eq('session_id', sessionId).order('sort_order', { ascending: true }),
       supabase.from('board_games').select('*').eq('session_id', sessionId),
@@ -35,6 +45,7 @@ export function useBoardSpectator(sessionId: string) {
     const snapshot = buildSnapshot({
       participants: (sessionParticipants ?? []) as unknown as RawSessionParticipant[],
       guests: (guestParticipants ?? []) as RawGuestParticipant[],
+      overrides: (overrideRows ?? []) as RawParticipantOverride[],
       states: (stateRows ?? []) as BoardPlayerStateRow[],
       courtRows: (courtRows ?? []) as CourtRow[],
       gameRows: (gameRows ?? []) as BoardGameRow[],
@@ -77,6 +88,16 @@ export function useBoardSpectator(sessionId: string) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'session_participants', filter: `session_id=eq.${sessionId}` },
+        () => loadSnapshot(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'session_participant_overrides',
+          filter: `session_id=eq.${sessionId}`,
+        },
         () => loadSnapshot(),
       )
       .subscribe((status) => {

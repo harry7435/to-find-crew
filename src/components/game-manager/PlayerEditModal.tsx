@@ -78,12 +78,20 @@ export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: P
 
   if (!player) return null;
 
+  const isUser = player.participantType === 'user';
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>선수 정보 수정</DialogTitle>
         </DialogHeader>
+
+        {isUser && (
+          <p className="text-sm text-muted-foreground">
+            이 모임에서만 적용되는 표시정보예요. 실제 프로필은 변경되지 않아요.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
