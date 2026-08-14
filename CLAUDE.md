@@ -108,22 +108,9 @@
 
 ## Legal Pages (`/terms`, `/privacy`)
 
-- `src/app/terms/page.tsx` and `src/app/privacy/page.tsx` are hand-written static documents (shared
-  shell: `src/components/legal/LegalLayout.tsx`). They are **not** boilerplate — the privacy policy
-  enumerates the actual collected fields and names every external processor (Supabase, Vercel,
-  Google, Kakao) individually, and nothing links them to `supabase-schema.sql`. **When a schema
-  change adds a personal-data field that a participant or organizer enters, or a new third-party
-  service is integrated, update the policy in the same change.** No lint or test catches the drift;
-  it's a remember-to-check convention like the additive-only schema rule.
-- The policy's §6 and the terms' 제7조 exist specifically because organizers enter *other people's*
-  names/gender/skill/age via `guest_participants` and `session_participant_overrides` — they place
-  the consent-collection burden on the organizer who typed the data in. If that data-entry model
-  changes, those two clauses are the ones to revisit.
-- `src/app/auth/login/page.tsx` links both documents from its consent sentence, and login is treated
-  as implied consent (no checkbox) — a deliberate choice for conversion, revisited only if
-  under-14 verification or optional consent items appear. Keep both routes reachable: they were
-  linked from that sentence for a while before the pages existed, which meant the app claimed to
-  collect consent to documents that 404'd.
+- Hand-written documents that must be updated in the same change whenever a schema change adds a
+  personal-data field or a new third-party service is integrated — no lint/test catches the drift.
+  See `docs/gotchas/legal-pages-maintenance.md` for what exactly to check and why.
 
 ## Git Workflow
 
@@ -133,147 +120,41 @@
 
 ## Game Manager Login Migration Pattern
 
-- `/game-manager` (no-login localStorage trial) can migrate its player roster into a real
-  server-backed session (`/badminton/[id]`) when the user logs in. The flow spans 4 files:
-  `MigrateBanner.tsx` (sets the flag + routes to login, or opens the modal directly if already
-  logged in) → `auth/callback/page.tsx` (reads the flag, redirects to `/game-manager` instead of
-  `/` if set) → `game-manager/page.tsx`'s mount effect (reads + clears the flag, opens the modal)
-  → `MigrateModal.tsx` (creates the session, copies players into `guest_participants`, navigates
-  to the new session).
-- **`MIGRATION_PENDING_FLAG` (`src/utils/gameManagerMigration.ts`) has exactly one consumer that
-  clears it: the `game-manager` page's mount effect.** `auth/callback` only *reads* the flag to
-  decide where to redirect — it must never call `removeItem` on it. A whole-branch review caught
-  a bug where both files cleared it independently, which silently broke the "modal auto-opens
-  after login" behavior (the callback's clear always ran first, so the mount effect's check was
-  always false). If you touch either file, preserve this single-consumer rule.
-- When the flag is absent, both `auth/callback` and `game-manager` behave exactly as before this
-  feature existed (redirect to `/`, no auto-opened modal) — this backward-compatibility path must
-  keep working for every login flow that isn't game-manager migration (e.g.
-  `/badminton/invite/[code]`).
+- `/game-manager` can migrate its localStorage player roster into a real server-backed session on
+  login, across 4 files (`MigrateBanner.tsx` → `auth/callback/page.tsx` → `game-manager/page.tsx`'s
+  mount effect → `MigrateModal.tsx`) sharing a flag with a single-consumer rule that's easy to
+  accidentally break. See `docs/gotchas/game-manager-login-migration.md` before touching any of
+  those 4 files.
 
 ## Spectator Board Read-Only Duplication Pattern
 
-- `/badminton/[id]` branches on `isOrganizer = user?.id === session.creator_id` to render either
-  `OrganizerBoard` (full read/write, via `useBoardRealtime`) or `SpectatorBoard` (read-only, via
-  `useBoardSpectator`) — see `src/app/badminton/[id]/page.tsx`.
-- **`useBoardRealtime` (`src/hooks/useBoardRealtime.ts`) and `useBoardSpectator`
-  (`src/hooks/useBoardSpectator.ts`) intentionally duplicate their Supabase fetch/subscribe
-  boilerplate (~20 lines: the 5-table `Promise.all` fetch + `postgres_changes` subscription
-  wiring).** Only the pure mapping logic is shared, via `buildSnapshot()` in
-  `src/utils/boardSnapshot.ts`. This was a deliberate, user-approved trade-off to keep
-  `useBoardSpectator` fully independent of `useBoardRealtime` — no read-only hook is allowed to
-  share code paths with the hook that performs writes (including the `board_player_state` seeding
-  `INSERT` that `useBoardRealtime` does on load), so that it's structurally impossible for a
-  spectator/unauthenticated visitor to trigger a write. **Do not "clean up" this duplication by
-  merging the two hooks or adding a read/write mode flag to `useBoardRealtime`** without checking
-  with the user first — the duplication is the safety mechanism, not an oversight.
-- The two hooks also use different Supabase Realtime channel names on purpose —
-  `board-${sessionId}` (organizer) vs `board-spectator-${sessionId}` (spectator) — so the two
-  roles never share a channel subscription instance.
-- **Resolved (2026-08-11/12):** the old "인원 풀" vs. separate "참가자 목록" duplication noted above
-  was the "UI 재설계" roadmap item (`docs/superpowers/specs/2026-07-14-board-persistence-design.md`
-  로드맵 항목 4) — it shipped. `ParticipantsList.tsx` was deleted; `OrganizerBoard` now uses a single
-  `Tabs` (`인원 풀` / `팀 뽑기`) in its left column instead of two separately-scrolling lists. See
-  `docs/superpowers/specs/2026-08-11-board-roster-layout-design.md` and
-  `docs/superpowers/specs/2026-08-11-team-court-box-design.md` for the design rationale, and
-  `src/components/badminton/OrganizerBoard.tsx`'s `Tabs`/`TabsContent` structure for the current
-  implementation.
+- `useBoardRealtime`/`useBoardSpectator` intentionally duplicate Supabase fetch/subscribe
+  boilerplate as a safety mechanism — a read-only hook must never share a write code path with the
+  hook that performs writes. Do not "clean up" this duplication without checking with the user
+  first. See `docs/gotchas/spectator-board-duplication.md` for the full rationale.
 
 ## Session-Scoped Participant Display-Info Overrides
 
-- Organizers can override a **logged-in** participant's display info (name/gender/skill_level/
-  age_group) for a single session, without touching their actual `users` profile — stored in
-  `session_participant_overrides` (one row per `session_participant_id`, additive-only new table,
-  see `supabase-schema.sql`). Guest participants don't need this: their row in `guest_participants`
-  *is* the display info, so it's updated directly.
-- **Merge/fallback logic lives in `toPlayer()`/`buildSnapshot()` in `src/utils/boardSnapshot.ts`**:
-  for a logged-in participant, `override?.<field> ?? user.<field>` — override wins if present,
-  otherwise fall back to the joined `users` profile value.
-- **`age_group` is the one field with no fallback, because `users` has no `age_group` column at
-  all** (only `guest_participants` and `session_participant_overrides` do). So a logged-in
-  participant who's never had an override set will always show an empty age group on the board —
-  this is expected, not a bug, and not something an `ALTER TABLE users ADD COLUMN age_group ...`
-  should "fix" (that would violate the additive-only convention above without explicit sign-off).
-  If you're debugging "why is this user's age group blank," check for a missing override row
-  before assuming a data bug.
-- `useBoardRealtime.ts`'s `updatePlayer()` branches on `participantType`: `'user'` → upsert into
-  `session_participant_overrides` (`onConflict: 'session_participant_id'`); `'guest'` → direct
-  `UPDATE guest_participants`. The upsert only patches the keys present in the `updates` object
-  (same partial-update semantics as the rest of `updatePlayer`), so previously-set override fields
-  persist even if a later edit's form field is left blank/unselected — it does not null them out.
-- **If you add a new editable field to `Player`, update all four spots**: the `PlayerEditModal.tsx`
-  form, the `session_participant_overrides` table schema (once this table is live in Supabase, that
-  requires an actual `ALTER TABLE` + explicit sign-off — unlike this feature's initial `age_group`
-  addition, which could edit the `CREATE TABLE` statement directly only because the table hadn't
-  been deployed yet), the `RawParticipantOverride` type + merge branch in `boardSnapshot.ts`, and
-  the `'user'` branch of `updatePlayer()` in `useBoardRealtime.ts`.
+- Organizers can override a logged-in participant's display info for one session only, via
+  `session_participant_overrides` + a fallback merge in `boardSnapshot.ts` — `age_group` has no
+  profile fallback by design (`users` has no such column; this is expected, not a bug). See
+  `docs/gotchas/session-participant-overrides.md` before adding a new overridable field or touching
+  `updatePlayer()`'s `participantType` branch in `useBoardRealtime.ts`.
 
 ## Game Manager Board Shared-State & Styling Conventions
 
-- **Controlled-prop lifting for cross-component shared UI state.** When a piece of UI state needs to
-  be visible/actionable from two separate DOM locations owned by *different* components — e.g. a
-  parent's desktop header action-button group and a child's own mobile-only button row — keep it as a
-  controlled prop pair on the child (`value` + `onValueChange`), with the actual `useState` living in
-  the parent, rather than as child-local state. This is a repeated pattern, not a one-off:
-  `selectedPlayers`, `isCustomPicking`, and `isEditingSelection` (named `isEditingCustomPick` in
-  `OrganizerBoard.tsx`/`game-manager/page.tsx`) all follow it. Example: `CustomTeamPicker`'s
-  `isEditingSelection`/`onEditingSelectionChange` props exist so the "다시 선택" button can render
-  both in `OrganizerBoard`'s desktop header (the `isCustomPicking` branch next to `TabsList`) and in
-  `CustomTeamPicker`'s own mobile-only button row (the bottom `md:hidden` block) and stay in sync.
-  Don't "simplify" these back to local `useState` in the child without checking whether a parent call
-  site depends on the same value.
-- **`boundedOnDesktop` (`CustomTeamPicker.tsx`) is a related but distinct convention — layout-budget
-  delegation, not shared state.** It tells the child whether an ancestor (`OrganizerBoard`'s
-  fixed-viewport `md:` dashboard) has already given its tab a fixed height to fill and scroll within
-  (`true`), vs. the child sitting on an ordinary unbounded page like `/game-manager` and needing to
-  self-limit its own scroll height via `max-h-[55vh]` (`false`, the default). Any new board
-  sub-component embedded in both the fixed-viewport `OrganizerBoard` dashboard and a normal-scrolling
-  page should follow this same boolean-prop pattern rather than hardcoding one layout assumption.
-- **`TeamCourtBox` (`src/components/game-manager/TeamCourtBox.tsx`) deliberately splits color across
-  two independent channels — do not merge them.** Player name text + gender icon color always encodes
-  *gender* (`getGenderColor()`: `text-blue-600` = male, `text-pink-600` = female), never team side.
-  Team side (A = left / B = right) is encoded only via background wash (`bg-blue-50` vs `bg-violet-50`
-  on the side container) and border color (`border-blue-200` vs `border-violet-200` on each chip),
-  never via text color. All consumers (`CourtManager`, `GameQueue`, `GameHistory`, `TeamPicker`,
-  `CustomTeamPicker`, `SpectatorBoard`) render through this single component, so changing its color
-  logic changes all of them at once — check both channels stay independent before "simplifying."
-- **`waiting_since`/`waitingSince` must not be cleared when a group enters the queue.** It tracks
-  "since when has this player been waiting to play," and `PlayerList.tsx`'s wait-time badge
-  (`formatElapsed(player.waitingSince, now)`) is shown for **both** `status === 'active'` and
-  `status === 'queued'` players, not just `'active'`. This is deliberately distinct from a queue
-  party's own `queuedAt`/`board_games.queued_at` (used only by `GameQueue.tsx` to show how long the
-  *group* has been queued). The other status transitions (game end, game cancel, dequeue) correctly
-  reset `waiting_since` to `nowIso` because they start a *new* wait — `enqueueGame` is the one
-  exception, since entering the queue is a *continuation* of an existing wait, not a new one. Both
-  `useGameManager.ts` and `useBoardRealtime.ts` had a regression where their `enqueueGame` also
-  nulled `waiting_since`/`waitingSince` on entering the queue — this silently made the wait-time
-  badge disappear the moment a group got matched into the queue (no error; the field is nullable so
-  nothing crashed). Fixed by omitting `waiting_since`/`waitingSince` from the update entirely inside
-  `enqueueGame` in both files. If you touch either hook's `enqueueGame` again, keep this invariant in
-  both — they're an intentionally duplicated pair (see Spectator Board Read-Only Duplication Pattern
-  above), so a fix in one without the other silently half-fixes the bug.
+- Several repeated, load-bearing patterns in the board components: controlled-prop lifting for
+  cross-component shared UI state, `boundedOnDesktop` layout-budget delegation, `TeamCourtBox`'s two
+  independent color channels (gender vs. team side), and `waiting_since` reset rules around
+  `enqueueGame`. See `docs/gotchas/game-manager-board-conventions.md` before "simplifying" any of
+  `CustomTeamPicker.tsx`, `TeamCourtBox.tsx`, or either hook's `enqueueGame()`.
 
 ## Invite Flow: Guest/Login Duplicate-Participant Prevention
 
-- When an organizer pre-registers players as guests (`guest_participants` — no `user_id`/`phone`
-  column, per the additive-only schema convention above) and the real person later joins the same
-  session by logging in via the invite link, there is no reliable way to detect "this logged-in user
-  is the same person as that guest row" — `guest_participants` has no field linking it to a `users`
-  row, and matching by name alone is unsafe (typos, duplicate names, nicknames the organizer typed
-  in).
-- Rather than adding a schema column to support auto-matching, or a name-matching heuristic,
-  `InvitePage` (`src/app/badminton/invite/[code]/page.tsx`) asks a logged-in user to explicitly
-  choose between **"참가자로 추가하고 입장"** (calls `/api/badminton/sessions/join`, adds a
-  `session_participants` row) and **"인원 추가 없이 보기만 하기"** (skip joining, navigate straight
-  to `/badminton/[id]` — no participant row needed, since viewing only requires `isOrganizer` to
-  evaluate `false` and fall through to `SpectatorBoard`) when they land on an invite link.
-- **Do not "fix" this by adding automatic name-matching** between `session_participants`/`users` and
-  `guest_participants`, or by adding a linking column to `guest_participants`, without checking with
-  the user first — both were considered and explicitly rejected this way: the name typed for a guest
-  entry might not match the logged-in account's display name at all, so any automatic matcher risks
-  merging the wrong two people (or failing to merge the same person) with no visible error. If an
-  organizer needs to clean up a stale duplicate guest entry, that's a manual removal from the board,
-  not something this flow should try to detect automatically.
+- Guest/login duplicate-person matching is deliberately manual (organizer choice on the invite
+  page), not automatic — auto-matching by name was explicitly considered and rejected. See
+  `docs/gotchas/invite-duplicate-participant-prevention.md` before adding any linking/matching
+  logic between `guest_participants` and `users`.
 
 ## Testing / Verification
 
@@ -285,24 +166,20 @@
 
 ## Guest Favorites (`/badminton/favorites`) — localStorage-only by design
 
-- `src/utils/guestFavorites.ts` stores favorited session IDs in a single `localStorage` key
-  (`guest_favorite_sessions`) in the browser, with no server-side table or sync — this is
-  intentional, not a stopgap. It's the only session-recovery mechanism available to a *guest*
-  (non-logged-in) participant: guests have no account, so `my-sessions`
-  (`/api/badminton/sessions/my-sessions`) can't help them find their way back to a session.
-  `addFavoriteSessionId()` is called once, right after a successful guest join
-  (`InvitePage.handleGuestJoin` in `src/app/badminton/invite/[code]/page.tsx`).
-- Known/accepted downside: favorites don't follow the guest across devices/browsers, and clearing
-  site data loses them — the only recovery path then is re-requesting the invite link from the
-  organizer. This was judged acceptable because the invite link is always the pre-existing fallback
-  anyway; this feature only adds a shortcut, it doesn't replace anything.
-- **Don't "upgrade" this to a server-backed table without checking with the user first** — doing so
-  would require a way to identify a guest without login (e.g. a persisted device ID), which is a
-  bigger design question than this feature was meant to solve.
+- `guestFavorites.ts` is intentionally localStorage-only, not a server table — the only
+  session-recovery path for non-logged-in guests. See `docs/gotchas/guest-favorites.md` before
+  proposing a server-backed upgrade.
 
 ## Docs Layout
 
-- `docs/superpowers/specs/*.md` — design docs (what/why) for larger features.
-- `docs/superpowers/plans/*.md` — task-by-task implementation plans (checkbox `- [ ]` format).
+- `docs/superpowers/specs/*.md` — design docs (what/why) for larger features. **Gitignored
+  (`/docs/superpowers/` in `.gitignore`) — local-only, not committed, invisible to other
+  contributors and to anyone cloning the repo.**
+- `docs/superpowers/plans/*.md` — task-by-task implementation plans (checkbox `- [ ]` format). Same
+  gitignore scope as specs above.
+- `docs/gotchas/*.md` — **git-tracked.** One file per narrow "read this before touching X" pattern,
+  split out of this file to keep CLAUDE.md itself short. CLAUDE.md keeps a 2-4 line pointer to each;
+  the full detail lives in the linked file. When a pointer's summary stops being enough context on
+  its own, that's the signal to open the linked file, not to re-inline it here.
 - `.claude/plans/*.md` — older, ad hoc plans predating the specs/plans split. New work uses
   `docs/superpowers/{specs,plans}/`.
