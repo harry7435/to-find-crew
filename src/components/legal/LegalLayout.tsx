@@ -13,7 +13,9 @@ export default function LegalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    // AppShell이 세로 flex로 감싸므로 min-h-screen이 아니라 flex-1을 써야 한다.
+    // (min-h-screen이면 pt-16 + 푸터 높이만큼 넘쳐 불필요한 스크롤이 생긴다)
+    <div className="flex-1 bg-gray-50">
       <div className="container mx-auto max-w-3xl px-4 py-10">
         <Link
           href="/"

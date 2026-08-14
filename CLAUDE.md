@@ -18,9 +18,11 @@
   tool/ORM). Changes get pasted into the Supabase dashboard SQL editor manually.
 - **Additive-only convention:** when adding features, only use `CREATE TABLE` (plus supporting
   `CREATE INDEX` / RLS policies for the *new* tables). Do not `ALTER TABLE` or `DROP TABLE` on existing
-  tables without explicit sign-off — this is an explicit, repeated user preference. Example: the board
-  persistence feature added `board_player_state`, `courts`, `board_games` as brand-new tables rather
-  than adding columns to `session_participants` or reusing the old `teams`/`games` tables.
+  tables without explicit sign-off — this is an explicit, repeated user preference. Examples: the board
+  persistence feature added `board_player_state`, `courts`, `board_games` as brand-new tables; the
+  session-scoped display-info override feature (see below) added `session_participant_overrides` —
+  both rather than adding columns to existing tables (`session_participants`, `users`) or reusing old
+  table structures (`teams`/`games`).
 - **Realtime gotchas** — `CREATE TABLE` alone does not make a table broadcast over Supabase Realtime.
   Two extra steps are required for any new table that needs live updates:
   1. `ALTER PUBLICATION supabase_realtime ADD TABLE <table_name>;`
@@ -28,6 +30,20 @@
      primary key in the old record, so a realtime filter on a non-PK column (e.g. `session_id`) silently
      fails to match `DELETE` events. Both failure modes are silent (no error, subscription just never
      fires) — verify with manual multi-browser testing, not just single-tab checks.
+- **`datetime-local` inputs → `TIMESTAMPTZ` columns must be converted client-side, not
+  server-side.** `<input type="datetime-local">` (e.g. `session_date` in `SessionForm.tsx` /
+  `edit/[id]/page.tsx`) produces a timezone-naive string like `"2026-08-14T20:00"`. Supabase/
+  Postgres's session timezone is UTC, so sending that string as-is into a `TIMESTAMPTZ` column
+  gets it interpreted as UTC — silently storing a time off by the browser's UTC offset (9 hours
+  for KST). Fix: convert with `new Date(data.session_date).toISOString()` in the client
+  component, immediately before the fetch call — not inside the API route. Doing the conversion
+  server-side reproduces the same bug, because Vercel serverless functions default to UTC, not
+  the user's local timezone. The inverse conversion (UTC ISO string → local `datetime-local`
+  value, needed to pre-fill an edit form) requires the matching local-offset correction — see
+  `convertToDateTimeLocal()` in `src/app/badminton/edit/[id]/page.tsx`
+  (`date.setMinutes(date.getMinutes() - date.getTimezoneOffset())`). No error is thrown in
+  either direction; verify by checking actual stored/displayed times, not just that the request
+  succeeds. See commit `7a482d1`.
 
 ## Supabase Configuration Gotchas
 
@@ -64,6 +80,50 @@
   picker game), `/auth/login`, `/auth/callback` (auth-flow pages where a header is redundant). If
   a new page needs the same kind of custom/no header treatment, add its path to that list rather
   than fighting the global header from within the page.
+- **The footer uses the opposite direction on purpose — `SHOW_FOOTER_ROUTES` in `AppShell.tsx` is
+  an allow-list, not an exclusion list.** The board pages (`/badminton/[id]`, `/game-manager`) are
+  viewport-filling dashboards that lose court/queue space to anything extra at the bottom, so the
+  safe default has to be "no footer": with an exclusion list, forgetting to register a new
+  board-family page silently shrinks its layout. Only document/form-style pages are opted in. Board
+  pages surface `/terms` and `/privacy` through `Header.tsx`'s user dropdown instead — which only
+  renders for logged-in users, so a guest sitting on `/game-manager` or a spectator board currently
+  has no in-page link to either document (they have to go via the home page). That gap is known and
+  accepted, not an oversight to "fix" silently.
+- **`AppShell` is a sticky-footer flex column, so page roots must use `flex-1`, never
+  `min-h-screen`.** The header is `fixed`, so `AppShell` always adds `pt-16` to its content wrapper;
+  the wrapper is `flex-1` and owns the 100vh budget. A page root that declares its own
+  `min-h-screen` stacks 100vh on top of that `pt-16` plus the footer height and overflows the
+  viewport, producing a permanent scrollbar even when the content is one screen short. No error is
+  thrown — it only shows up on the *shortest* page in the app, so verify there, not on a long one.
+  Both `src/app/page.tsx` and `src/components/legal/LegalLayout.tsx` hit this; the second one hit it
+  even though the fix for the first had just landed in the same change.
+- **`Header.tsx`'s `loading` branch and its loaded branch must render the identical `HEADER_CLASS`,
+  above all `fixed`.** `AppShell`'s unconditional `pt-16` assumes the header is out of document
+  flow. When only one branch is `fixed`, the other is `static` and occupies a real 64px on top of
+  that padding, so the instant `loading` flips the whole page jumps by exactly the header height.
+  Cold loads hide it (the loading window is too short); it becomes obvious right after
+  login/logout, when `AuthContext` re-runs `getSession()` on an already-mounted page and `loading`
+  goes back to `true`. Test auth-state *transitions*, not just fresh page loads. If a third branch
+  (error, skeleton) is ever added, it uses `HEADER_CLASS` too.
+
+## Legal Pages (`/terms`, `/privacy`)
+
+- `src/app/terms/page.tsx` and `src/app/privacy/page.tsx` are hand-written static documents (shared
+  shell: `src/components/legal/LegalLayout.tsx`). They are **not** boilerplate — the privacy policy
+  enumerates the actual collected fields and names every external processor (Supabase, Vercel,
+  Google, Kakao) individually, and nothing links them to `supabase-schema.sql`. **When a schema
+  change adds a personal-data field that a participant or organizer enters, or a new third-party
+  service is integrated, update the policy in the same change.** No lint or test catches the drift;
+  it's a remember-to-check convention like the additive-only schema rule.
+- The policy's §6 and the terms' 제7조 exist specifically because organizers enter *other people's*
+  names/gender/skill/age via `guest_participants` and `session_participant_overrides` — they place
+  the consent-collection burden on the organizer who typed the data in. If that data-entry model
+  changes, those two clauses are the ones to revisit.
+- `src/app/auth/login/page.tsx` links both documents from its consent sentence, and login is treated
+  as implied consent (no checkbox) — a deliberate choice for conversion, revisited only if
+  under-14 verification or optional consent items appear. Keep both routes reachable: they were
+  linked from that sentence for a while before the pages existed, which meant the app claimed to
+  collect consent to documents that 404'd.
 
 ## Git Workflow
 
@@ -119,6 +179,35 @@
   `src/components/badminton/OrganizerBoard.tsx`'s `Tabs`/`TabsContent` structure for the current
   implementation.
 
+## Session-Scoped Participant Display-Info Overrides
+
+- Organizers can override a **logged-in** participant's display info (name/gender/skill_level/
+  age_group) for a single session, without touching their actual `users` profile — stored in
+  `session_participant_overrides` (one row per `session_participant_id`, additive-only new table,
+  see `supabase-schema.sql`). Guest participants don't need this: their row in `guest_participants`
+  *is* the display info, so it's updated directly.
+- **Merge/fallback logic lives in `toPlayer()`/`buildSnapshot()` in `src/utils/boardSnapshot.ts`**:
+  for a logged-in participant, `override?.<field> ?? user.<field>` — override wins if present,
+  otherwise fall back to the joined `users` profile value.
+- **`age_group` is the one field with no fallback, because `users` has no `age_group` column at
+  all** (only `guest_participants` and `session_participant_overrides` do). So a logged-in
+  participant who's never had an override set will always show an empty age group on the board —
+  this is expected, not a bug, and not something an `ALTER TABLE users ADD COLUMN age_group ...`
+  should "fix" (that would violate the additive-only convention above without explicit sign-off).
+  If you're debugging "why is this user's age group blank," check for a missing override row
+  before assuming a data bug.
+- `useBoardRealtime.ts`'s `updatePlayer()` branches on `participantType`: `'user'` → upsert into
+  `session_participant_overrides` (`onConflict: 'session_participant_id'`); `'guest'` → direct
+  `UPDATE guest_participants`. The upsert only patches the keys present in the `updates` object
+  (same partial-update semantics as the rest of `updatePlayer`), so previously-set override fields
+  persist even if a later edit's form field is left blank/unselected — it does not null them out.
+- **If you add a new editable field to `Player`, update all four spots**: the `PlayerEditModal.tsx`
+  form, the `session_participant_overrides` table schema (once this table is live in Supabase, that
+  requires an actual `ALTER TABLE` + explicit sign-off — unlike this feature's initial `age_group`
+  addition, which could edit the `CREATE TABLE` statement directly only because the table hadn't
+  been deployed yet), the `RawParticipantOverride` type + merge branch in `boardSnapshot.ts`, and
+  the `'user'` branch of `updatePlayer()` in `useBoardRealtime.ts`.
+
 ## Game Manager Board Shared-State & Styling Conventions
 
 - **Controlled-prop lifting for cross-component shared UI state.** When a piece of UI state needs to
@@ -148,6 +237,43 @@
   never via text color. All consumers (`CourtManager`, `GameQueue`, `GameHistory`, `TeamPicker`,
   `CustomTeamPicker`, `SpectatorBoard`) render through this single component, so changing its color
   logic changes all of them at once — check both channels stay independent before "simplifying."
+- **`waiting_since`/`waitingSince` must not be cleared when a group enters the queue.** It tracks
+  "since when has this player been waiting to play," and `PlayerList.tsx`'s wait-time badge
+  (`formatElapsed(player.waitingSince, now)`) is shown for **both** `status === 'active'` and
+  `status === 'queued'` players, not just `'active'`. This is deliberately distinct from a queue
+  party's own `queuedAt`/`board_games.queued_at` (used only by `GameQueue.tsx` to show how long the
+  *group* has been queued). The other status transitions (game end, game cancel, dequeue) correctly
+  reset `waiting_since` to `nowIso` because they start a *new* wait — `enqueueGame` is the one
+  exception, since entering the queue is a *continuation* of an existing wait, not a new one. Both
+  `useGameManager.ts` and `useBoardRealtime.ts` had a regression where their `enqueueGame` also
+  nulled `waiting_since`/`waitingSince` on entering the queue — this silently made the wait-time
+  badge disappear the moment a group got matched into the queue (no error; the field is nullable so
+  nothing crashed). Fixed by omitting `waiting_since`/`waitingSince` from the update entirely inside
+  `enqueueGame` in both files. If you touch either hook's `enqueueGame` again, keep this invariant in
+  both — they're an intentionally duplicated pair (see Spectator Board Read-Only Duplication Pattern
+  above), so a fix in one without the other silently half-fixes the bug.
+
+## Invite Flow: Guest/Login Duplicate-Participant Prevention
+
+- When an organizer pre-registers players as guests (`guest_participants` — no `user_id`/`phone`
+  column, per the additive-only schema convention above) and the real person later joins the same
+  session by logging in via the invite link, there is no reliable way to detect "this logged-in user
+  is the same person as that guest row" — `guest_participants` has no field linking it to a `users`
+  row, and matching by name alone is unsafe (typos, duplicate names, nicknames the organizer typed
+  in).
+- Rather than adding a schema column to support auto-matching, or a name-matching heuristic,
+  `InvitePage` (`src/app/badminton/invite/[code]/page.tsx`) asks a logged-in user to explicitly
+  choose between **"참가자로 추가하고 입장"** (calls `/api/badminton/sessions/join`, adds a
+  `session_participants` row) and **"인원 추가 없이 보기만 하기"** (skip joining, navigate straight
+  to `/badminton/[id]` — no participant row needed, since viewing only requires `isOrganizer` to
+  evaluate `false` and fall through to `SpectatorBoard`) when they land on an invite link.
+- **Do not "fix" this by adding automatic name-matching** between `session_participants`/`users` and
+  `guest_participants`, or by adding a linking column to `guest_participants`, without checking with
+  the user first — both were considered and explicitly rejected this way: the name typed for a guest
+  entry might not match the logged-in account's display name at all, so any automatic matcher risks
+  merging the wrong two people (or failing to merge the same person) with no visible error. If an
+  organizer needs to clean up a stale duplicate guest entry, that's a manual removal from the board,
+  not something this flow should try to detect automatically.
 
 ## Testing / Verification
 
@@ -156,6 +282,23 @@
   `pnpm build` requires real `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars to
   fully succeed (static generation touches the Supabase client); placeholder values are enough to catch
   compile/type errors even without a live project.
+
+## Guest Favorites (`/badminton/favorites`) — localStorage-only by design
+
+- `src/utils/guestFavorites.ts` stores favorited session IDs in a single `localStorage` key
+  (`guest_favorite_sessions`) in the browser, with no server-side table or sync — this is
+  intentional, not a stopgap. It's the only session-recovery mechanism available to a *guest*
+  (non-logged-in) participant: guests have no account, so `my-sessions`
+  (`/api/badminton/sessions/my-sessions`) can't help them find their way back to a session.
+  `addFavoriteSessionId()` is called once, right after a successful guest join
+  (`InvitePage.handleGuestJoin` in `src/app/badminton/invite/[code]/page.tsx`).
+- Known/accepted downside: favorites don't follow the guest across devices/browsers, and clearing
+  site data loses them — the only recovery path then is re-requesting the invite link from the
+  organizer. This was judged acceptable because the invite link is always the pre-existing fallback
+  anyway; this feature only adds a shortcut, it doesn't replace anything.
+- **Don't "upgrade" this to a server-backed table without checking with the user first** — doing so
+  would require a way to identify a guest without login (e.g. a persisted device ID), which is a
+  bigger design question than this feature was meant to solve.
 
 ## Docs Layout
 
