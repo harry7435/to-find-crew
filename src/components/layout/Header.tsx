@@ -11,10 +11,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
-import { Calendar, LogOut, MessageCircle, Star, User } from 'lucide-react';
+import { Calendar, FileText, LogOut, MessageCircle, Shield, Star, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FEEDBACK_URL = 'https://open.kakao.com/o/s9oD9DIi';
+
+// 로딩 중 헤더와 로딩 완료 헤더가 반드시 같은 클래스를 써야 한다.
+// AppShell은 헤더가 fixed(문서 흐름에서 빠짐)라는 전제로 항상 pt-16을 주므로,
+// 한쪽만 fixed가 아니면 loading이 풀리는 순간 본문이 헤더 높이만큼 위로 튄다.
+// (로그인/로그아웃 직후 홈으로 돌아올 때 getSession() 재확인으로 loading이 다시
+//  true가 되면서 이 점프가 눈에 띄게 재현됐다.)
+const HEADER_CLASS = 'border-b fixed bg-white top-0 w-full z-10';
 
 export default function Header() {
   const { user, loading, signOut } = useAuth();
@@ -35,7 +42,7 @@ export default function Header() {
 
   if (loading) {
     return (
-      <header className="border-b bg-white">
+      <header className={HEADER_CLASS}>
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold">
             🏸 To Find Crew
@@ -47,7 +54,7 @@ export default function Header() {
   }
 
   return (
-    <header className="border-b fixed bg-white top-0 w-full z-10">
+    <header className={HEADER_CLASS}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/" className="text-xl font-bold">
           🏸 To Find Crew
@@ -122,6 +129,24 @@ export default function Header() {
                     <Link href="/profile">
                       <User className="mr-2 h-4 w-4" />
                       <span>프로필</span>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  {/* 경기 보드 화면에는 푸터가 없다(AppShell의 SHOW_FOOTER_ROUTES 참고).
+                      로그인 사용자에게는 이 메뉴가 약관/방침으로 가는 상시 진입점이다. */}
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/terms">
+                      <FileText className="mr-2 h-4 w-4" />
+                      <span>서비스 이용약관</span>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/privacy">
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>개인정보처리방침</span>
                     </Link>
                   </DropdownMenuItem>
 

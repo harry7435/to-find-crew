@@ -2,9 +2,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
+// AppShell이 세로 flex로 감싸므로 min-h-screen 대신 flex-1로 남은 높이를 채운다.
+// (min-h-screen을 쓰면 헤더 패딩 + 푸터 높이만큼 넘쳐 불필요한 스크롤이 생긴다)
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-r from-blue-50 to-green-50">
+    <main className="flex-1 bg-gradient-to-r from-blue-50 to-green-50">
       {/* Hero Section */}
       <section className="container mx-auto px-4 pt-10 pb-4 text-center">
         <h1 className="text-4xl font-bold tracking-tight text-foreground mb-4">To Find Crew 🏸</h1>
