@@ -161,7 +161,7 @@ export default function CustomTeamPicker({
             {activePlayers.length === 0 ? (
               <p className="text-sm text-gray-500 text-center py-4">활성 선수가 없습니다</p>
             ) : (
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {activePlayers.map((player) => {
                   const isSelected = selectedPlayers.find((p) => p.id === player.id);
                   const isPinned = player.pinned === true;

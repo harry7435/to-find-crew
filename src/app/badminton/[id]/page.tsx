@@ -11,7 +11,7 @@ import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Calendar, MapPin, Users, Copy, Share2, QrCode, Settings } from 'lucide-react';
+import { ArrowLeft, Calendar, History, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +29,7 @@ export default function SessionDetailPage() {
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -241,42 +242,23 @@ export default function SessionDetailPage() {
   return (
     <>
       <div className="flex flex-col gap-3 px-4 sm:px-6 lg:px-8 py-4 md:h-[calc(100vh-4rem)] md:overflow-hidden">
-        {/* 헤더 */}
-        <div className="shrink-0 flex items-center justify-between">
+        {/* 헤더 + 번개 모임 정보 요약 (한 줄로 축소) */}
+        <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-white px-3 py-2">
           <Button variant="ghost" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
             뒤로가기
           </Button>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowQRCode(true)}>
-              <QrCode className="h-4 w-4 mr-2" />
-              QR 코드
-            </Button>
-            <Button variant="outline" size="sm" onClick={shareSession}>
-              <Share2 className="h-4 w-4 mr-2" />
-              공유
-            </Button>
-          </div>
-        </div>
-
-        {/* 번개 모임 정보 요약 바 */}
-        <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-white px-4 py-3">
-          <span className="text-lg font-semibold text-gray-900">{session.name}</span>
+          <span className="text-base font-semibold text-gray-900">{session.name}</span>
           {getStatusBadge(session.status)}
-          {session.creator && <span className="text-sm text-gray-500">생성자: {session.creator.name}</span>}
 
-          <span className="flex items-center gap-1 text-sm text-gray-600">
-            <MapPin className="h-4 w-4 text-gray-500" />
+          <span className="hidden sm:flex items-center gap-1 text-xs text-gray-600">
+            <MapPin className="h-3.5 w-3.5 text-gray-500" />
             {session.venue_name}
           </span>
-          <span className="flex items-center gap-1 text-sm text-gray-600">
-            <Calendar className="h-4 w-4 text-gray-500" />
+          <span className="hidden sm:flex items-center gap-1 text-xs text-gray-600">
+            <Calendar className="h-3.5 w-3.5 text-gray-500" />
             {sessionDateTime}
-          </span>
-          <span className="flex items-center gap-1 text-sm text-gray-600">
-            <Users className="h-4 w-4 text-gray-500" />
-            코트 {session.court_count}개
           </span>
 
           <div className="ml-auto flex items-center gap-2">
@@ -292,11 +274,27 @@ export default function SessionDetailPage() {
                 </Button>
               </Link>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowQRCode(true)} className="text-xs">
+              <QrCode className="h-3.5 w-3.5 mr-1" />
+              QR 코드
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareSession} className="text-xs">
+              <Share2 className="h-3.5 w-3.5 mr-1" />
+              공유
+            </Button>
           </div>
         </div>
 
         {/* 게임 관리 (모임장) / 실시간 현황판 (그 외 전원) */}
-        <h2 className="shrink-0 text-lg font-semibold">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+        <div className="shrink-0 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+          {isOrganizer && session.status !== 'completed' && (
+            <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
+              <History className="h-4 w-4 mr-1" />
+              게임 기록 · 초기화
+            </Button>
+          )}
+        </div>
 
         <div className="md:flex-1 md:min-h-0 md:overflow-hidden">
           {session.status === 'completed' ? (
@@ -304,7 +302,11 @@ export default function SessionDetailPage() {
               종료된 모임입니다. {isOrganizer ? '게임 관리' : '현황판'} 기능은 사용할 수 없습니다.
             </p>
           ) : isOrganizer ? (
-            <OrganizerBoard sessionId={session.id} />
+            <OrganizerBoard
+              sessionId={session.id}
+              isMoreSheetOpen={isMoreSheetOpen}
+              onMoreSheetOpenChange={setIsMoreSheetOpen}
+            />
           ) : (
             <SpectatorBoard sessionId={session.id} />
           )}

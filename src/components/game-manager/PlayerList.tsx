@@ -4,9 +4,15 @@ import { useState } from 'react';
 import { Player } from '@/hooks/useGameManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Trophy, Edit, Coffee, Play, Star, Swords, Clock, ListChecks } from 'lucide-react';
+import { X, Trophy, Edit, Coffee, Play, Star, Swords, Clock, ListChecks, MoreVertical } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export type AttendanceFilter = 'all' | 'attending' | 'absent';
 type SortOption = 'name' | 'wait' | 'game';
@@ -174,7 +180,7 @@ export default function PlayerList({
       ) : sortedPlayers.length === 0 ? (
         <div className="text-center py-6 text-gray-500 text-sm">해당 조건의 선수가 없습니다</div>
       ) : (
-        <div className="flex flex-col gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
           {sortedPlayers.map((player) => {
             const gameCount = gameCountsMap?.get(player.id) || 0;
             const ageLabel = getAgeGroupLabel(player.ageGroup);
@@ -183,11 +189,12 @@ export default function PlayerList({
             const isQueued = player.status === 'queued';
             const isPinned = player.pinned === true;
             const isAttending = player.attending === true;
-            const waitingLabel = player.status === 'active' ? formatElapsed(player.waitingSince, now) : null;
+            const waitingLabel =
+              player.status === 'active' || player.status === 'queued' ? formatElapsed(player.waitingSince, now) : null;
             return (
               <div
                 key={player.id}
-                className={`flex items-center justify-between p-2 border rounded-lg hover:shadow-md transition-shadow ${
+                className={`relative flex flex-col gap-1 p-2 pr-9 border rounded-lg hover:shadow-md transition-shadow ${
                   isPlaying
                     ? 'bg-green-50 border-green-300'
                     : isQueued
@@ -201,7 +208,45 @@ export default function PlayerList({
                             : ''
                 }`}
               >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="absolute top-1 right-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="더보기">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => onTogglePinned(player.id)}
+                        disabled={isResting || isPlaying || isQueued || !isAttending}
+                      >
+                        <Star className={`h-4 w-4 ${isPinned ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                        {isPinned ? '필수 포함 해제' : '필수 포함 설정'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onToggleStatus(player.id)}
+                        disabled={isPlaying || isQueued || !isAttending}
+                      >
+                        {isResting ? <Play className="h-4 w-4" /> : <Coffee className="h-4 w-4" />}
+                        {isResting ? '게임 복귀' : '휴식 설정'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onEditPlayer(player)} disabled={isPlaying || isQueued}>
+                        <Edit className="h-4 w-4" />
+                        수정
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => onRemovePlayer(player.id)}
+                        disabled={isPlaying || isQueued}
+                      >
+                        <X className="h-4 w-4" />
+                        삭제
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <input
                     type="checkbox"
                     checked={isAttending}
@@ -209,96 +254,56 @@ export default function PlayerList({
                     className="h-4 w-4 shrink-0 accent-blue-600"
                     title={isAttending ? '오늘 참석 해제' : '오늘 참석 체크'}
                   />
-                  <span className={`text-xl shrink-0 ${getGenderColor(player.gender)}`}>
+                  <span
+                    className={`font-medium ${
+                      !isAttending || isResting ? 'text-gray-500' : getGenderColor(player.gender)
+                    }`}
+                  >
+                    {player.name}
+                  </span>
+                  <span className={`text-lg shrink-0 ${getGenderColor(player.gender)}`}>
                     {getGenderIcon(player.gender)}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span
-                        className={`font-medium ${
-                          !isAttending || isResting ? 'text-gray-500' : getGenderColor(player.gender)
-                        }`}
-                      >
-                        {player.name}
-                      </span>
-                      {player.skillLevel && (
-                        <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                      )}
-                      {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
-                      {isPlaying && (
-                        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-                          <Swords className="h-3 w-3 mr-1" />
-                          게임중
-                        </Badge>
-                      )}
-                      {isQueued && (
-                        <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300">
-                          대기열
-                        </Badge>
-                      )}
-                      {isResting && isAttending && (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                          <Coffee className="h-3 w-3 mr-1" />
-                          휴식중
-                        </Badge>
-                      )}
-                      {isPinned && (
-                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                          <Star className="h-3 w-3 mr-1" />
-                          필수 포함
-                        </Badge>
-                      )}
-                      {waitingLabel && (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {waitingLabel}
-                        </Badge>
-                      )}
-                    </div>
-                    {gameCount > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-gray-600 mt-1">
-                        <Trophy className="h-3 w-3" />
-                        <span>{gameCount}게임</span>
-                      </div>
-                    )}
+                  {player.skillLevel && (
+                    <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
+                  )}
+                  {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
+                  {isPlaying && (
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                      <Swords className="h-3 w-3 mr-1" />
+                      게임중
+                    </Badge>
+                  )}
+                  {isQueued && (
+                    <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300">
+                      대기열
+                    </Badge>
+                  )}
+                  {isResting && isAttending && (
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                      <Coffee className="h-3 w-3 mr-1" />
+                      휴식중
+                    </Badge>
+                  )}
+                  {isPinned && (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                      <Star className="h-3 w-3 mr-1" />
+                      필수 포함
+                    </Badge>
+                  )}
+                  {waitingLabel && (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {waitingLabel}
+                    </Badge>
+                  )}
+                </div>
+                {gameCount > 0 && (
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <Trophy className="h-3 w-3" />
+                    <span>{gameCount}게임</span>
                   </div>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTogglePinned(player.id)}
-                    title={isPinned ? '필수 포함 해제' : '필수 포함 설정'}
-                    disabled={isResting || isPlaying || isQueued || !isAttending}
-                  >
-                    <Star className={`h-4 w-4 ${isPinned ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onToggleStatus(player.id)}
-                    title={isResting ? '게임 복귀' : '휴식 설정'}
-                    disabled={isPlaying || isQueued || !isAttending}
-                  >
-                    {isResting ? <Play className="h-4 w-4" /> : <Coffee className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onEditPlayer(player)}
-                    disabled={isPlaying || isQueued}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemovePlayer(player.id)}
-                    disabled={isPlaying || isQueued}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             );
           })}

@@ -316,9 +316,7 @@ export function useBoardRealtime(sessionId: string) {
         toast.error('대기열 추가에 실패했습니다');
         return;
       }
-      await Promise.all(
-        playerIds.map((id) => updatePlayerState(id, { player_status: 'queued', pinned: false, waiting_since: null })),
-      );
+      await Promise.all(playerIds.map((id) => updatePlayerState(id, { player_status: 'queued', pinned: false })));
       await loadSnapshot();
     },
     [sessionId, loadSnapshot],

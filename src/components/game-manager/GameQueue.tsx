@@ -34,59 +34,57 @@ export default function GameQueue({ queue, courts, players, onAssignCourt, onRem
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
       {queue.map((item, idx) => {
         const waitingLabel = formatElapsed(item.queuedAt, now);
         return (
-          <div key={item.id} className="flex gap-3 border border-purple-200 bg-purple-50 rounded-lg p-3">
-            <div className="shrink-0 self-center flex items-center justify-center h-8 w-8 rounded-full bg-purple-600 text-white font-bold text-sm">
-              {idx + 1}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                {waitingLabel ? (
+          <div key={item.id} className="border border-purple-200 bg-purple-50 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center h-6 w-6 rounded-full bg-purple-600 text-white font-bold text-xs">
+                  {idx + 1}
+                </span>
+                {waitingLabel && (
                   <Badge variant="outline" className="bg-white text-purple-700 border-purple-200 text-xs">
                     <Clock className="h-3 w-3 mr-1" />
                     {waitingLabel}
                   </Badge>
-                ) : (
-                  <span />
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemove(item.id)}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-                  title="대기 취소"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
-              <div className="mb-2">
-                <TeamCourtBox
-                  players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
-                  size="compact"
-                />
-              </div>
-              {freeCourts.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-1">
-                  빈 코트가 없습니다. 게임 종료 또는 코트 추가 필요
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1">
-                  {freeCourts.map((court) => (
-                    <Button
-                      key={court.id}
-                      size="sm"
-                      onClick={() => onAssignCourt(item.id, court.id)}
-                      className="h-7 text-xs"
-                    >
-                      {court.name}
-                    </Button>
-                  ))}
-                </div>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(item.id)}
+                className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                title="대기 취소"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
+            <div className="mb-2">
+              <TeamCourtBox
+                players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
+                size="compact"
+              />
+            </div>
+            {freeCourts.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-1">
+                빈 코트가 없습니다. 게임 종료 또는 코트 추가 필요
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {freeCourts.map((court) => (
+                  <Button
+                    key={court.id}
+                    size="sm"
+                    onClick={() => onAssignCourt(item.id, court.id)}
+                    className="h-7 text-xs"
+                  >
+                    {court.name}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}

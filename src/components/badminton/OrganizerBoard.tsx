@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { UserPlus, History, Plus } from 'lucide-react';
+import { UserPlus, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
 import { Player } from '@/hooks/useGameManager';
@@ -22,9 +22,13 @@ import { randomTeamPicker } from '@/utils/smartTeamPicker';
 
 interface OrganizerBoardProps {
   sessionId: string;
+  /** "게임 기록 · 초기화" 시트 개폐 상태. 트리거 버튼은 부모(세션 상세 페이지)의 "게임 관리"
+   *  타이틀과 같은 줄에 렌더링되므로, 시트 콘텐츠를 소유한 이 컴포넌트가 상태를 controlled prop으로 받는다. */
+  isMoreSheetOpen: boolean;
+  onMoreSheetOpenChange: (open: boolean) => void;
 }
 
-export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
+export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheetOpenChange }: OrganizerBoardProps) {
   const {
     players,
     games,
@@ -58,8 +62,9 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
   const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
-  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<'pool' | 'pick'>('pool');
+  // 코트 관리가 대기열보다 중요한 정보라, 기본값은 접어서 코트 관리가 남는 세로 공간을 다 쓰게 한다.
+  const [isQueueExpanded, setIsQueueExpanded] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
 
   const playerGameCounts = useMemo(() => {
@@ -329,13 +334,6 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
 
   return (
     <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
-      <div className="shrink-0 flex justify-end">
-        <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
-          <History className="h-4 w-4 mr-1" />
-          게임 기록 · 초기화
-        </Button>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:flex-1 md:min-h-0">
         {/* 왼쪽: 인원 풀 / 팀 뽑기 탭 전환 — 활성 탭이 컬럼 전체 높이를 쓰고 그 안에서만 스크롤된다 */}
         <Card className="md:min-h-0">
@@ -435,7 +433,8 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
           </Tabs>
         </Card>
 
-        {/* 오른쪽: 코트 관리 + 대기열 (세로로 쌓임, 항상 둘 다 펼쳐짐) */}
+        {/* 오른쪽: 코트 관리 + 대기열 (세로로 쌓임). 대기열이 상대적으로 덜 중요해 기본 접힘 —
+            접힌 동안은 코트 관리(flex-1)가 남는 세로 공간을 전부 차지한다 */}
         <div className="flex flex-col gap-3 md:min-h-0">
           <Card className="gap-3 md:flex-1 md:min-h-0">
             <CardHeader className="shrink-0 pb-3">
@@ -469,27 +468,39 @@ export default function OrganizerBoard({ sessionId }: OrganizerBoardProps) {
             </CardContent>
           </Card>
 
-          <Card className="gap-3 md:flex-1 md:min-h-0">
+          <Card className={`gap-3 ${isQueueExpanded ? 'md:flex-1 md:min-h-0' : 'shrink-0'}`}>
             <CardHeader className="shrink-0 pb-3">
-              <CardTitle className="text-base md:text-lg">
-                대기열
-                {queue.length > 0 && <span className="text-sm text-gray-500 ml-2">({queue.length}개)</span>}
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base md:text-lg">
+                  대기열
+                  {queue.length > 0 && <span className="text-sm text-gray-500 ml-2">({queue.length}개)</span>}
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsQueueExpanded((v) => !v)}
+                  title={isQueueExpanded ? '대기열 접기' : '대기열 펼치기'}
+                >
+                  {isQueueExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="pt-0 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
-              <GameQueue
-                queue={queue}
-                courts={courts}
-                players={players}
-                onAssignCourt={handleAssignQueueToCourt}
-                onRemove={handleRemoveFromQueue}
-              />
-            </CardContent>
+            {isQueueExpanded && (
+              <CardContent className="pt-0 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
+                <GameQueue
+                  queue={queue}
+                  courts={courts}
+                  players={players}
+                  onAssignCourt={handleAssignQueueToCourt}
+                  onRemove={handleRemoveFromQueue}
+                />
+              </CardContent>
+            )}
           </Card>
         </div>
       </div>
 
-      <Sheet open={isMoreSheetOpen} onOpenChange={setIsMoreSheetOpen}>
+      <Sheet open={isMoreSheetOpen} onOpenChange={onMoreSheetOpenChange}>
         <SheetContent className="flex flex-col">
           <SheetHeader className="shrink-0">
             <SheetTitle>게임 기록 · 초기화</SheetTitle>

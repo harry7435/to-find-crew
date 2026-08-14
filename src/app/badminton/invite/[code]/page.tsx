@@ -12,6 +12,7 @@ import { BadmintonSession } from '@/types/badminton';
 import { Calendar, MapPin, Users, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { addFavoriteSessionId } from '@/utils/guestFavorites';
 
 export default function InvitePage() {
   const params = useParams();
@@ -98,6 +99,7 @@ export default function InvitePage() {
         description: `${session?.name}에 참가하셨습니다`,
       });
 
+      addFavoriteSessionId(result.session.id);
       router.push(`/badminton/${result.session.id}`);
     } catch (error) {
       console.error('Join error:', error);
@@ -138,6 +140,11 @@ export default function InvitePage() {
     } finally {
       setIsJoining(false);
     }
+  };
+
+  const handleViewWithoutJoining = () => {
+    if (!session) return;
+    router.push(`/badminton/${session.id}`);
   };
 
   if (isLoading) {
@@ -221,8 +228,14 @@ export default function InvitePage() {
             <div className="space-y-4">
               <p className="text-sm text-gray-600">로그인된 상태로 번개 모임에 참가합니다.</p>
               <Button onClick={handleAuthenticatedJoin} disabled={isJoining} className="w-full">
-                {isJoining ? '참가 중...' : '참가하기'}
+                {isJoining ? '참가 중...' : '참가자로 추가하고 입장'}
               </Button>
+              <Button onClick={handleViewWithoutJoining} disabled={isJoining} variant="outline" className="w-full">
+                인원 추가 없이 보기만 하기
+              </Button>
+              <p className="text-xs text-gray-500 text-center">
+                운영진이 이미 내 이름으로 인원을 등록해뒀다면, 인원을 추가하지 않고 들어가면 중복 등록을 피할 수 있어요.
+              </p>
             </div>
           ) : (
             <form onSubmit={handleGuestJoin} className="space-y-4">

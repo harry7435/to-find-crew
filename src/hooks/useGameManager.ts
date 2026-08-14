@@ -276,9 +276,7 @@ export function useGameManager() {
     };
     setQueue((prev) => [...prev, newItem]);
     setPlayers((prev) =>
-      prev.map((p) =>
-        playerIds.includes(p.id) ? { ...p, status: 'queued' as const, pinned: false, waitingSince: null } : p,
-      ),
+      prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'queued' as const, pinned: false } : p)),
     );
   }, []);
 

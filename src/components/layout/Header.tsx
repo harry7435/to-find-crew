@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
-import { Calendar, LogOut, MessageCircle, User } from 'lucide-react';
+import { Calendar, LogOut, MessageCircle, Star, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FEEDBACK_URL = 'https://open.kakao.com/o/s9oD9DIi';
@@ -64,6 +64,16 @@ export default function Header() {
             <span className="hidden sm:inline">문의하기</span>
           </a>
 
+          {!user && (
+            <Link
+              href="/badminton/favorites"
+              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+            >
+              <Star className="h-4 w-4" />
+              <span className="hidden sm:inline">즐겨찾기</span>
+            </Link>
+          )}
+
           {user ? (
             <>
               {/* 사용자 메뉴 */}
@@ -98,6 +108,13 @@ export default function Header() {
                     <Link href="/badminton/my-sessions">
                       <Calendar className="mr-2 h-4 w-4" />
                       <span>내 모임</span>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/badminton/favorites">
+                      <Star className="mr-2 h-4 w-4" />
+                      <span>즐겨찾기</span>
                     </Link>
                   </DropdownMenuItem>
 
