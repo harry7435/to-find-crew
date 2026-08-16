@@ -389,6 +389,16 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
             </div>
 
             <TabsContent value="pool" className="flex-none px-6 pb-6 md:flex md:flex-col md:flex-1 md:min-h-0">
+              {/* 선수 등록 (모바일 전용 — PC/태블릿은 카드 헤더에 표시) */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsAddPlayerModalOpen(true)}
+                className="w-full mb-3 md:hidden"
+              >
+                <UserPlus className="h-3.5 w-3.5 mr-1" />
+                선수 등록
+              </Button>
               <PlayerList
                 players={players}
                 onRemovePlayer={handleRemovePlayer}
