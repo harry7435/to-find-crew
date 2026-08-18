@@ -433,6 +433,42 @@ export function useBoardRealtime(sessionId: string) {
     [loadSnapshot],
   );
 
+  const moveCourtGame = useCallback(
+    async (fromCourtId: string, toCourtId: string) => {
+      if (fromCourtId === toCourtId) return;
+      const { data: rows } = await supabase
+        .from('board_games')
+        .select('id, court_id')
+        .in('court_id', [fromCourtId, toCourtId])
+        .eq('status', 'playing');
+      const fromGame = rows?.find((g) => g.court_id === fromCourtId);
+      if (!fromGame) return;
+      const toGame = rows?.find((g) => g.court_id === toCourtId);
+
+      const { error } = await supabase.from('board_games').update({ court_id: toCourtId }).eq('id', fromGame.id);
+      if (error) {
+        toast.error('코트 이동에 실패했습니다');
+        return;
+      }
+      if (toGame) {
+        const { error: swapError } = await supabase
+          .from('board_games')
+          .update({ court_id: fromCourtId })
+          .eq('id', toGame.id);
+        if (swapError) {
+          // 맞바꾸기의 두 번째 업데이트가 실패하면 첫 업데이트를 되돌린다.
+          // 그대로 두면 두 게임이 같은 코트를 가리켜 한 게임이 화면에서 사라진다.
+          await supabase.from('board_games').update({ court_id: fromCourtId }).eq('id', fromGame.id);
+          toast.error('코트 교환에 실패했습니다');
+          return;
+        }
+      }
+      // 선수 상태(playing)와 started_at은 그대로 두어 경과 시간이 이어지게 한다
+      await loadSnapshot();
+    },
+    [loadSnapshot],
+  );
+
   const removeGame = useCallback(
     async (id: string) => {
       await supabase.from('board_games').delete().eq('id', id).eq('status', 'completed');
@@ -469,5 +505,6 @@ export function useBoardRealtime(sessionId: string) {
     assignQueueToCourt,
     endCourtGame,
     cancelCourtGame,
+    moveCourtGame,
   };
 }

@@ -51,6 +51,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     assignQueueToCourt,
     endCourtGame,
     cancelCourtGame,
+    moveCourtGame,
     isLoading,
   } = useBoardRealtime(sessionId);
 
@@ -181,6 +182,17 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
       }
     },
     [courts, cancelCourtGame],
+  );
+
+  const handleMoveCourtGame = useCallback(
+    (fromCourtId: string, toCourtId: string) => {
+      const from = courts.find((c) => c.id === fromCourtId);
+      const to = courts.find((c) => c.id === toCourtId);
+      if (!from?.playerIds || !to) return;
+      moveCourtGame(fromCourtId, toCourtId);
+      toast.success(to.playerIds ? `${from.name} ↔ ${to.name} 게임을 맞바꿨습니다` : `${to.name}에 게임을 옮겼습니다`);
+    },
+    [courts, moveCourtGame],
   );
 
   const handleStartCustomPicking = useCallback(() => {
@@ -474,6 +486,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onRenameCourt={renameCourt}
                 onEndGame={handleEndCourtGame}
                 onCancelGame={handleCancelCourtGame}
+                onMoveGame={handleMoveCourtGame}
               />
             </CardContent>
           </Card>

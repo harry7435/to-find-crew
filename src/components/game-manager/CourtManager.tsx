@@ -5,7 +5,7 @@ import { Court, Player } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { X, Pencil, Check, Clock, Undo2 } from 'lucide-react';
+import { X, Pencil, Check, Clock, ArrowLeftRight } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
 import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
@@ -22,6 +22,7 @@ interface CourtManagerProps {
   onRenameCourt: (id: string, name: string) => void;
   onEndGame: (id: string) => void;
   onCancelGame: (id: string) => void;
+  onMoveGame: (fromCourtId: string, toCourtId: string) => void;
 }
 
 export default function CourtManager({
@@ -34,11 +35,14 @@ export default function CourtManager({
   onRenameCourt,
   onEndGame,
   onCancelGame,
+  onMoveGame,
 }: CourtManagerProps) {
   const now = useTicker();
   const [addingName, setAddingName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  /** '코트 이동' 목록을 펼친 코트 id (한 번에 하나만 열린다) */
+  const [movingId, setMovingId] = useState<string | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +92,11 @@ export default function CourtManager({
     setEditingName('');
   };
 
+  const handleMove = (fromCourtId: string, toCourtId: string) => {
+    onMoveGame(fromCourtId, toCourtId);
+    setMovingId(null);
+  };
+
   return (
     <div className="flex flex-col gap-2 md:h-full md:min-h-0">
       <div className="md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
@@ -102,6 +111,8 @@ export default function CourtManager({
           {courts.map((court) => {
             const isActive = court.playerIds !== null;
             const isEditing = editingId === court.id;
+            const isMoving = movingId === court.id;
+            const moveTargets = courts.filter((c) => c.id !== court.id);
 
             return (
               <div
@@ -182,14 +193,25 @@ export default function CourtManager({
                       players={court.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
                       size="compact"
                     />
-                    <div className="grid grid-cols-2 gap-1 mt-2">
+                    <div className="grid grid-cols-3 gap-1 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMovingId(isMoving ? null : court.id)}
+                        className={`h-7 text-xs ${
+                          isMoving
+                            ? 'border-blue-400 bg-blue-100 text-blue-700 hover:bg-blue-100 hover:text-blue-700'
+                            : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700'
+                        }`}
+                      >
+                        코트 이동
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => onCancelGame(court.id)}
                         className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
                       >
-                        <Undo2 className="h-3 w-3 mr-1" />
                         게임 취소
                       </Button>
                       <Button
@@ -201,6 +223,36 @@ export default function CourtManager({
                         게임 종료
                       </Button>
                     </div>
+                    {isMoving && (
+                      <div className="mt-1 rounded-md border border-blue-200 bg-blue-50 p-2">
+                        {moveTargets.length === 0 ? (
+                          <p className="text-xs text-gray-500 text-center py-0.5">이동할 다른 코트가 없습니다</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {moveTargets.map((target) => {
+                              const occupied = target.playerIds !== null;
+                              return (
+                                <Button
+                                  key={target.id}
+                                  size="sm"
+                                  variant={occupied ? 'outline' : 'default'}
+                                  onClick={() => handleMove(court.id, target.id)}
+                                  title={occupied ? `${target.name} 게임과 맞바꾸기` : `${target.name}(으)로 게임 이동`}
+                                  className={`h-7 text-xs ${
+                                    occupied
+                                      ? 'border-orange-300 bg-white text-orange-600 hover:bg-orange-50 hover:text-orange-700'
+                                      : ''
+                                  }`}
+                                >
+                                  {target.name}
+                                  {occupied && <ArrowLeftRight className="h-3 w-3 ml-1" />}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   !isEditing && <p className="text-xs text-gray-400 text-center py-1">비어있음</p>

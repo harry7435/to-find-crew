@@ -339,6 +339,38 @@ export function useGameManager() {
     [courts],
   );
 
+  const moveCourtGame = useCallback((fromCourtId: string, toCourtId: string) => {
+    if (fromCourtId === toCourtId) return;
+    setCourts((prev) => {
+      const from = prev.find((c) => c.id === fromCourtId);
+      const to = prev.find((c) => c.id === toCourtId);
+      if (!from?.playerIds || !to) return prev;
+      // 게임 데이터(선수/시작시각/게임id/직전 대기시각)를 코트 이름만 남기고 통째로 맞바꾼다.
+      // 대상이 빈 코트면 빈 값이 그대로 되돌아와 출발 코트가 비워진다.
+      return prev.map((c) => {
+        if (c.id === fromCourtId) {
+          return {
+            ...c,
+            playerIds: to.playerIds,
+            gameStartedAt: to.gameStartedAt,
+            gameId: to.gameId ?? null,
+            prevWaiting: to.prevWaiting,
+          };
+        }
+        if (c.id === toCourtId) {
+          return {
+            ...c,
+            playerIds: from.playerIds,
+            gameStartedAt: from.gameStartedAt,
+            gameId: from.gameId ?? null,
+            prevWaiting: from.prevWaiting,
+          };
+        }
+        return c;
+      });
+    });
+  }, []);
+
   const cancelCourtGame = useCallback(
     (courtId: string) => {
       const court = courts.find((c) => c.id === courtId);
@@ -392,6 +424,7 @@ export function useGameManager() {
     assignQueueToCourt,
     endCourtGame,
     cancelCourtGame,
+    moveCourtGame,
     resetCourts,
     resetQueue,
     isLoading,
