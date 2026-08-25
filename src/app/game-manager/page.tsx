@@ -140,7 +140,6 @@ export default function GameManagerPage() {
     const playerNames = pickedPlayers.map((p) => p.name).join(', ');
     toast.success('대기열에 추가되었습니다', {
       description: `선수: ${playerNames}`,
-      duration: 4000,
     });
     setPickedPlayers(null);
     setIsCustomPicking(false);

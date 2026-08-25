@@ -119,7 +119,6 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     enqueueGame(playerIds);
     toast.success('대기열에 추가되었습니다', {
       description: `선수: ${pickedPlayers.map((p) => p.name).join(', ')}`,
-      duration: 4000,
     });
     setPickedPlayers(null);
     setIsCustomPicking(false);
