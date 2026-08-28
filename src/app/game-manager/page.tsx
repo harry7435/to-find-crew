@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ArrowLeft, ChevronDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGameManager, Player } from '@/hooks/useGameManager';
+import { useReadyFlags } from '@/hooks/useReadyFlags';
 import PlayerForm from '@/components/game-manager/PlayerForm';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
@@ -49,6 +50,7 @@ export default function GameManagerPage() {
     moveCourtGame,
     isLoading,
   } = useGameManager();
+  const { readyIds, toggleReady, removeReady, clearReady, pruneReady } = useReadyFlags('game-manager-ready');
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
@@ -90,6 +92,23 @@ export default function GameManagerPage() {
     return counts;
   }, [games]);
 
+  // 참석자 목록이 바뀔 때마다 미참석자의 준비완료를 해제한다. 문자열 키로 비교해야
+  // players 배열이 매 렌더 새로 만들어져도 실제 참석자가 바뀔 때만 정리가 돈다.
+  const attendingIdsKey = useMemo(
+    () =>
+      players
+        .filter((p) => p.attending)
+        .map((p) => p.id)
+        .sort()
+        .join(','),
+    [players],
+  );
+
+  useEffect(() => {
+    if (isLoading) return;
+    pruneReady(new Set(attendingIdsKey ? attendingIdsKey.split(',') : []));
+  }, [attendingIdsKey, isLoading, pruneReady]);
+
   const handleAddPlayer = useCallback(
     (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
       addPlayer(playerData);
@@ -103,6 +122,7 @@ export default function GameManagerPage() {
       const player = players.find((p) => p.id === id);
       if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
         removePlayer(id);
+        removeReady(id);
         toast.success('선수가 삭제되었습니다');
         if (pickedPlayers) {
           const allPickedIds = pickedPlayers.map((p) => p.id);
@@ -112,7 +132,7 @@ export default function GameManagerPage() {
         }
       }
     },
-    [players, removePlayer, pickedPlayers],
+    [players, removePlayer, removeReady, pickedPlayers],
   );
 
   const handleRandomPickTeams = useCallback(() => {
@@ -383,13 +403,14 @@ export default function GameManagerPage() {
 
     const hasRestingPlayers = players.some((p) => p.status === 'resting' && p.attending);
     const hasPinnedPlayers = players.some((p) => p.pinned === true);
+    const hasReadyPlayers = readyIds.size > 0;
 
-    if (!hasRestingPlayers && !hasPinnedPlayers) {
-      toast.error('휴식중이거나 필수 포함된 선수가 없습니다');
+    if (!hasRestingPlayers && !hasPinnedPlayers && !hasReadyPlayers) {
+      toast.error('휴식중이거나 필수 포함·준비완료된 선수가 없습니다');
       return;
     }
 
-    if (confirm('모든 참석 선수의 휴식 상태와 필수 포함을 해제하시겠습니까?')) {
+    if (confirm('모든 참석 선수의 휴식 상태·필수 포함·준비완료를 해제하시겠습니까?')) {
       const nowIso = new Date().toISOString();
       players.forEach((player) => {
         if (player.attending && (player.status === 'resting' || player.pinned === true)) {
@@ -400,10 +421,11 @@ export default function GameManagerPage() {
           });
         }
       });
+      clearReady();
       setPickedPlayers(null);
       toast.success('선수 상태가 초기화되었습니다');
     }
-  }, [players, updatePlayer]);
+  }, [players, updatePlayer, readyIds, clearReady]);
 
   const handleResetAttendance = useCallback(() => {
     if (!players.some((p) => p.attending)) {
@@ -502,6 +524,8 @@ export default function GameManagerPage() {
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
+                readyIds={readyIds}
+                onToggleReady={toggleReady}
               />
             </CardContent>
           </CollapsibleContent>
@@ -722,7 +746,8 @@ export default function GameManagerPage() {
                 </Button>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                ⚠️ 상태 초기화: 휴식·필수포함 해제 | 참석 해제: 오늘 참석 전원 off | 게임/선수 초기화: 되돌릴 수 없음
+                ⚠️ 상태 초기화: 휴식·필수포함·준비완료 해제 | 참석 해제: 오늘 참석 전원 off | 게임/선수 초기화: 되돌릴
+                수 없음
               </p>
             </CardContent>
           </CollapsibleContent>

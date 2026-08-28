@@ -4,7 +4,19 @@ import { useState } from 'react';
 import { Player } from '@/hooks/useGameManager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Trophy, Edit, Coffee, Play, Star, Swords, Clock, ListChecks, MoreVertical } from 'lucide-react';
+import {
+  X,
+  Trophy,
+  Edit,
+  Coffee,
+  Play,
+  Star,
+  Swords,
+  Clock,
+  ListChecks,
+  MoreVertical,
+  CheckCircle2,
+} from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
 import {
@@ -28,6 +40,8 @@ interface PlayerListProps {
   filter: AttendanceFilter;
   onFilterChange: (filter: AttendanceFilter) => void;
   gameCountsMap?: Map<string, number>;
+  readyIds: Set<string>;
+  onToggleReady: (id: string) => void;
 }
 
 function getSkillLevelColor(level: string): string {
@@ -76,6 +90,8 @@ export default function PlayerList({
   filter,
   onFilterChange,
   gameCountsMap,
+  readyIds,
+  onToggleReady,
 }: PlayerListProps) {
   const now = useTicker();
   const [sort, setSort] = useState<SortOption>('name');
@@ -189,6 +205,7 @@ export default function PlayerList({
             const isQueued = player.status === 'queued';
             const isPinned = player.pinned === true;
             const isAttending = player.attending === true;
+            const isReady = readyIds.has(player.id);
             const waitingLabel =
               player.status === 'active' || player.status === 'queued' ? formatElapsed(player.waitingSince, now) : null;
             return (
@@ -229,6 +246,10 @@ export default function PlayerList({
                       >
                         {isResting ? <Play className="h-4 w-4" /> : <Coffee className="h-4 w-4" />}
                         {isResting ? '게임 복귀' : '휴식 설정'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onToggleReady(player.id)} disabled={!isAttending}>
+                        <CheckCircle2 className={`h-4 w-4 ${isReady ? 'fill-emerald-400 text-emerald-600' : ''}`} />
+                        {isReady ? '준비완료 해제' : '준비완료 설정'}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onEditPlayer(player)} disabled={isPlaying || isQueued}>
                         <Edit className="h-4 w-4" />
@@ -289,6 +310,12 @@ export default function PlayerList({
                     <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
                       <Star className="h-3 w-3 mr-1" />
                       필수 포함
+                    </Badge>
+                  )}
+                  {isReady && isAttending && (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      준비완료
                     </Badge>
                   )}
                   {waitingLabel && (

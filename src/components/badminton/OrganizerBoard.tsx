@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { UserPlus, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
+import { useReadyFlags } from '@/hooks/useReadyFlags';
 import { Player } from '@/hooks/useGameManager';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerAddModal from '@/components/game-manager/PlayerAddModal';
@@ -54,6 +55,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     moveCourtGame,
     isLoading,
   } = useBoardRealtime(sessionId);
+  const { readyIds, toggleReady, removeReady, pruneReady } = useReadyFlags(`board-ready-${sessionId}`);
 
   const [pickedPlayers, setPickedPlayers] = useState<[Player, Player, Player, Player] | null>(null);
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
@@ -78,6 +80,23 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     return counts;
   }, [games]);
 
+  // 참석자 목록이 바뀔 때마다 미참석자의 준비완료를 해제한다. 문자열 키로 비교해야
+  // realtime 갱신으로 players 배열이 새로 만들어져도 실제 참석자가 바뀔 때만 정리가 돈다.
+  const attendingIdsKey = useMemo(
+    () =>
+      players
+        .filter((p) => p.attending)
+        .map((p) => p.id)
+        .sort()
+        .join(','),
+    [players],
+  );
+
+  useEffect(() => {
+    if (isLoading) return;
+    pruneReady(new Set(attendingIdsKey ? attendingIdsKey.split(',') : []));
+  }, [attendingIdsKey, isLoading, pruneReady]);
+
   const handleAddPlayer = useCallback(
     (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
       addPlayer(playerData);
@@ -91,13 +110,14 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
       const player = players.find((p) => p.id === id);
       if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
         removePlayer(id);
+        removeReady(id);
         toast.success('선수가 삭제되었습니다');
         if (pickedPlayers?.some((p) => p.id === id)) {
           setPickedPlayers(null);
         }
       }
     },
-    [players, removePlayer, pickedPlayers],
+    [players, removePlayer, removeReady, pickedPlayers],
   );
 
   const handleRandomPickTeams = useCallback(() => {
@@ -421,6 +441,8 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
+                readyIds={readyIds}
+                onToggleReady={toggleReady}
               />
             </TabsContent>
 
