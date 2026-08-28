@@ -270,7 +270,7 @@ export default function PlayerList({
                     title={isAttending ? '오늘 참석 해제' : '오늘 참석 체크'}
                   />
                   <span
-                    className={`font-medium ${
+                    className={`text-base md:text-lg font-semibold ${
                       !isAttending || isResting ? 'text-gray-500' : getGenderColor(player.gender)
                     }`}
                   >
