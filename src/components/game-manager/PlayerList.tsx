@@ -191,7 +191,9 @@ export default function PlayerList({
       ) : sortedPlayers.length === 0 ? (
         <div className="text-center py-6 text-gray-500 text-sm">해당 조건의 선수가 없습니다</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
+        // content-start 필수 — md 이상에서 flex-1로 높이를 확정받는데 grid의 align-content
+        // 기본값이 stretch라, 행이 적으면 카드가 남는 세로 공간만큼 늘어져 버린다
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
           {sortedPlayers.map((player) => {
             const gameCount = gameCountsMap?.get(player.id) || 0;
             const isResting = player.status === 'resting';
