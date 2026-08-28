@@ -74,11 +74,6 @@ function getGenderColor(gender?: 'male' | 'female'): string {
   return 'text-gray-400';
 }
 
-function getAgeGroupLabel(ageGroup?: string): string | null {
-  if (!ageGroup) return null;
-  return ageGroup === '60s+' ? '60대+' : ageGroup.replace('s', '대');
-}
-
 export default function PlayerList({
   players,
   onRemovePlayer,
@@ -199,7 +194,6 @@ export default function PlayerList({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
           {sortedPlayers.map((player) => {
             const gameCount = gameCountsMap?.get(player.id) || 0;
-            const ageLabel = getAgeGroupLabel(player.ageGroup);
             const isResting = player.status === 'resting';
             const isPlaying = player.status === 'playing';
             const isQueued = player.status === 'queued';
@@ -288,7 +282,6 @@ export default function PlayerList({
                   {player.skillLevel && (
                     <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
                   )}
-                  {ageLabel && <Badge variant="outline">{ageLabel}</Badge>}
                   {isPlaying && (
                     <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
                       <Swords className="h-3 w-3 mr-1" />

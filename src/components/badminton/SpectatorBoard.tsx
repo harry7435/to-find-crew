@@ -42,11 +42,6 @@ function getGenderIcon(gender?: 'male' | 'female'): string {
   return gender === 'male' ? '♂️' : '♀️';
 }
 
-function getAgeGroupLabel(ageGroup?: string): string | null {
-  if (!ageGroup) return null;
-  return ageGroup === '60s+' ? '60대+' : ageGroup.replace('s', '대');
-}
-
 function getStatusBadge(player: Player) {
   if (!player.attending) {
     return (
@@ -245,26 +240,18 @@ export default function SpectatorBoard({ sessionId }: SpectatorBoardProps) {
                 <p className="text-sm text-gray-500 text-center py-4">아직 참가자가 없습니다</p>
               ) : (
                 <div className="space-y-2">
-                  {rosterPlayers.map((player) => {
-                    const ageLabel = getAgeGroupLabel(player.ageGroup);
-                    return (
-                      <div key={player.id} className="flex items-center gap-2 p-2 border rounded-lg bg-white flex-wrap">
-                        <span className="text-lg shrink-0">{getGenderIcon(player.gender)}</span>
-                        <span className="font-medium text-sm">{player.name}</span>
-                        {player.skillLevel && (
-                          <Badge className={`text-xs ${getSkillLevelColor(player.skillLevel)}`}>
-                            {player.skillLevel}
-                          </Badge>
-                        )}
-                        {ageLabel && (
-                          <Badge variant="outline" className="text-xs">
-                            {ageLabel}
-                          </Badge>
-                        )}
-                        {getStatusBadge(player)}
-                      </div>
-                    );
-                  })}
+                  {rosterPlayers.map((player) => (
+                    <div key={player.id} className="flex items-center gap-2 p-2 border rounded-lg bg-white flex-wrap">
+                      <span className="text-lg shrink-0">{getGenderIcon(player.gender)}</span>
+                      <span className="font-medium text-sm">{player.name}</span>
+                      {player.skillLevel && (
+                        <Badge className={`text-xs ${getSkillLevelColor(player.skillLevel)}`}>
+                          {player.skillLevel}
+                        </Badge>
+                      )}
+                      {getStatusBadge(player)}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
