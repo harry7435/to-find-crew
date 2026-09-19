@@ -27,18 +27,29 @@
   never via text color. All consumers (`CourtManager`, `GameQueue`, `GameHistory`, `TeamPicker`,
   `CustomTeamPicker`, `SpectatorBoard`) render through this single component, so changing its color
   logic changes all of them at once — check both channels stay independent before "simplifying."
-- **`waiting_since`/`waitingSince` must not be cleared when a group enters the queue.** It tracks
-  "since when has this player been waiting to play," and `PlayerList.tsx`'s wait-time badge
-  (`formatElapsed(player.waitingSince, now)`) is shown for **both** `status === 'active'` and
-  `status === 'queued'` players, not just `'active'`. This is deliberately distinct from a queue
-  party's own `queuedAt`/`board_games.queued_at` (used only by `GameQueue.tsx` to show how long the
-  *group* has been queued). The other status transitions (game end, game cancel, dequeue) correctly
-  reset `waiting_since` to `nowIso` because they start a *new* wait — `enqueueGame` is the one
-  exception, since entering the queue is a *continuation* of an existing wait, not a new one. Both
-  `useGameManager.ts` and `useBoardRealtime.ts` had a regression where their `enqueueGame` also
-  nulled `waiting_since`/`waitingSince` on entering the queue — this silently made the wait-time
-  badge disappear the moment a group got matched into the queue (no error; the field is nullable so
-  nothing crashed). Fixed by omitting `waiting_since`/`waitingSince` from the update entirely inside
-  `enqueueGame` in both files. If you touch either hook's `enqueueGame` again, keep this invariant in
-  both — they're an intentionally duplicated pair (see the Spectator Board Read-Only Duplication
-  Pattern doc), so a fix in one without the other silently half-fixes the bug.
+- **`waiting_since`/`waitingSince` must not be touched by the queue round-trip — neither
+  `enqueueGame` nor `removeFromQueue`.** It tracks "since when has this player been waiting to
+  play," and `PlayerList.tsx`'s wait-time badge (`formatElapsed(player.waitingSince, now)`) is shown
+  for **both** `status === 'active'` and `status === 'queued'` players, not just `'active'`. This is
+  deliberately distinct from a queue party's own `queuedAt`/`board_games.queued_at` (used only by
+  `GameQueue.tsx` to show how long the *group* has been queued).
+  **The governing rule: only actually playing a game starts a new wait.** So `endCourtGame` resets
+  `waiting_since` to `nowIso`, and `useGameManager.ts`'s `cancelCourtGame` restores the pre-game
+  value it stashed in `court.prevWaiting`. Entering *and leaving* the queue is a mere continuation of
+  an existing wait — a player who was queued and then had the queue entry cancelled never played, so
+  their accumulated wait must survive intact.
+  Both hooks have hit this twice: first `enqueueGame` nulled `waiting_since`/`waitingSince` on
+  entering the queue (the badge vanished the moment a group got matched), then `removeFromQueue` set
+  it to `nowIso` on cancelling (the badge restarted from 0). Both are fixed by omitting the field
+  from the update entirely. Both failures are silent — the column is nullable and no error is thrown,
+  so verify by watching an actual badge across a queue → cancel round-trip, not by checking that the
+  write succeeded. If you touch either hook's `enqueueGame`/`removeFromQueue` again, keep this
+  invariant in both files — they're an intentionally duplicated pair (see the Spectator Board
+  Read-Only Duplication Pattern doc), so a fix in one without the other silently half-fixes the bug.
+- **Known divergence, not yet fixed: `cancelCourtGame` in `useBoardRealtime.ts` still resets
+  `waiting_since` to `nowIso`**, while `useGameManager.ts`'s equivalent restores `court.prevWaiting`.
+  Cancelling a game means the game didn't happen, so by the rule above the server-backed board is
+  wrong here. It isn't a simple fix: the localStorage board keeps `prevWaiting` on the in-memory
+  court object, and there is no column on `courts`/`board_games` to stash it — closing the gap needs
+  a schema decision (additive-only convention applies). Don't "align" the two by copying the
+  `nowIso` behaviour into `useGameManager.ts`.

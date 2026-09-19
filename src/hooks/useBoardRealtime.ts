@@ -356,13 +356,9 @@ export function useBoardRealtime(sessionId: string) {
     async (queueItemId: string) => {
       const { data: item } = await supabase.from('board_games').select('player_ids').eq('id', queueItemId).single();
       if (!item) return;
-      const nowIso = new Date().toISOString();
       await supabase.from('board_games').delete().eq('id', queueItemId);
-      await Promise.all(
-        (item.player_ids as string[]).map((id) =>
-          updatePlayerState(id, { player_status: 'active', waiting_since: nowIso }),
-        ),
-      );
+      // 대기열 취소는 실제 게임을 뛴 게 아니므로 waiting_since를 유지한다(대기 시간 이어서 누적).
+      await Promise.all((item.player_ids as string[]).map((id) => updatePlayerState(id, { player_status: 'active' })));
       await loadSnapshot();
     },
     [loadSnapshot],

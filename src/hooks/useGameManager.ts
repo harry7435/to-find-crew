@@ -285,11 +285,9 @@ export function useGameManager() {
       const item = queue.find((q) => q.id === queueItemId);
       if (!item) return;
       const playerIds = item.playerIds;
-      const nowIso = new Date().toISOString();
       setQueue((prev) => prev.filter((q) => q.id !== queueItemId));
-      setPlayers((prev) =>
-        prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: nowIso } : p)),
-      );
+      // 대기열 취소는 실제 게임을 뛴 게 아니므로 waitingSince를 유지한다(대기 시간 이어서 누적).
+      setPlayers((prev) => prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const } : p)));
     },
     [queue],
   );
