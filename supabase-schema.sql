@@ -195,9 +195,6 @@ CREATE POLICY "Users can insert own profile" ON users FOR INSERT WITH CHECK (
   auth.uid() IS NOT NULL AND auth.uid()::text = id::text
 );
 
--- For development/testing: Allow all operations on users (REMOVE IN PRODUCTION)
-CREATE POLICY "Allow all operations for development" ON users FOR ALL USING (true);
-
 -- Crews can be read by everyone
 CREATE POLICY "Crews can be read by everyone" ON crews FOR SELECT USING (true);
 
