@@ -53,3 +53,23 @@
   court object, and there is no column on `courts`/`board_games` to stash it — closing the gap needs
   a schema decision (additive-only convention applies). Don't "align" the two by copying the
   `nowIso` behaviour into `useGameManager.ts`.
+- **`useBoardRealtime.ts`'s multi-step writes are ordered so a mid-sequence failure is recoverable by
+  pressing the same button again — don't reorder them.** Each board action touches one `board_games`
+  row plus up to four `board_player_state` rows as separate requests (no transaction), so a network
+  drop between them leaves a half-applied state. The rule: never write the step that *removes the
+  retry handle* first. `endCourtGame`/`cancelCourtGame` look the game up by `court_id` +
+  `status = 'playing'`, and `removeFromQueue` by the queue row's id — so those three reset the
+  players **first** and complete/delete the game row **last**. In the opposite order a failure
+  leaves players stuck in `playing`/`queued` with no game row left to act on, and nothing in the UI
+  can release them (`handleToggleAttending` refuses `playing`/`queued` players). `enqueueGame`
+  inserts the game first and, if the player updates fail, deletes the row it just inserted so a
+  retry can't queue the same four twice. `assignQueueToCourt` keeps game-first order because its
+  half-applied state (game on court, players still `queued`) is released by ending/cancelling that
+  court. A real fix is a DB function per action; until then the ordering is the safety mechanism.
+- **Every `useBoardRealtime` action returns `Promise<boolean>` and shows its own error toast;
+  `OrganizerBoard` handlers must `await` it and show the success toast only on `true`.** The
+  handlers used to fire `toast.success` synchronously right after calling the action (a pattern
+  inherited from the synchronous localStorage hook `useGameManager`), so a failed write still
+  announced success. `loadSnapshot` in both board hooks likewise bails out without touching state
+  when any of its reads fails — treating a failed read as `[]` blanked the board on a brief network
+  drop. Simulate with DevTools → Network → Offline; a single-tab happy-path check proves nothing here.

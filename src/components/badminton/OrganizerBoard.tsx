@@ -98,18 +98,19 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   }, [attendingIdsKey, isLoading, pruneReady]);
 
   const handleAddPlayer = useCallback(
-    (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
-      addPlayer(playerData);
-      toast.success(`${playerData.name} 선수가 등록되었습니다 (미참석 상태)`);
+    async (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
+      if (await addPlayer(playerData)) {
+        toast.success(`${playerData.name} 선수가 등록되었습니다 (미참석 상태)`);
+      }
     },
     [addPlayer],
   );
 
   const handleRemovePlayer = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const player = players.find((p) => p.id === id);
       if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
-        removePlayer(id);
+        if (!(await removePlayer(id))) return;
         removeReady(id);
         toast.success('선수가 삭제되었습니다');
         if (pickedPlayers?.some((p) => p.id === id)) {
@@ -133,15 +134,21 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     }
   }, [players]);
 
-  const handleConfirmGame = useCallback(() => {
+  const handleConfirmGame = useCallback(async () => {
     if (!pickedPlayers) return;
-    const playerIds = pickedPlayers.map((p) => p.id) as [string, string, string, string];
-    enqueueGame(playerIds);
-    toast.success('대기열에 추가되었습니다', {
-      description: `선수: ${pickedPlayers.map((p) => p.name).join(', ')}`,
-    });
+    const picked = pickedPlayers;
+    const playerIds = picked.map((p) => p.id) as [string, string, string, string];
+    // 응답을 기다리는 동안 확정 버튼이 다시 눌려 같은 4명이 두 번 들어가지 않도록 먼저 비우고,
+    // 실패하면 뽑아 둔 4명을 되살려 바로 다시 시도할 수 있게 한다.
     setPickedPlayers(null);
     setIsCustomPicking(false);
+    if (await enqueueGame(playerIds)) {
+      toast.success('대기열에 추가되었습니다', {
+        description: `선수: ${picked.map((p) => p.name).join(', ')}`,
+      });
+    } else {
+      setPickedPlayers(picked);
+    }
   }, [pickedPlayers, enqueueGame]);
 
   const handleCancelPick = useCallback(() => {
@@ -149,19 +156,21 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   }, []);
 
   const handleAssignQueueToCourt = useCallback(
-    (queueItemId: string, courtId: string) => {
-      assignQueueToCourt(queueItemId, courtId);
+    async (queueItemId: string, courtId: string) => {
       const court = courts.find((c) => c.id === courtId);
-      toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`);
+      if (await assignQueueToCourt(queueItemId, courtId)) {
+        toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`);
+      }
     },
     [assignQueueToCourt, courts],
   );
 
   const handleRemoveFromQueue = useCallback(
-    (queueItemId: string) => {
+    async (queueItemId: string) => {
       if (confirm('대기열에서 이 게임을 취소하시겠습니까?')) {
-        removeFromQueue(queueItemId);
-        toast.success('대기열에서 취소되었습니다');
+        if (await removeFromQueue(queueItemId)) {
+          toast.success('대기열에서 취소되었습니다');
+        }
       }
     },
     [removeFromQueue],
@@ -180,36 +189,41 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   );
 
   const handleEndCourtGame = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const court = courts.find((c) => c.id === id);
       if (!court?.playerIds) return;
       if (confirm(`${court.name} 게임을 종료하시겠습니까?`)) {
-        endCourtGame(id);
-        toast.success(`${court.name} 게임이 종료되었습니다. 선수들이 복귀했습니다`);
+        if (await endCourtGame(id)) {
+          toast.success(`${court.name} 게임이 종료되었습니다. 선수들이 복귀했습니다`);
+        }
       }
     },
     [courts, endCourtGame],
   );
 
   const handleCancelCourtGame = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const court = courts.find((c) => c.id === id);
       if (!court?.playerIds) return;
       if (confirm(`${court.name} 게임을 취소하시겠습니까?\n(게임 기록이 남지 않습니다)`)) {
-        cancelCourtGame(id);
-        toast.success(`${court.name} 게임이 취소되었습니다`);
+        if (await cancelCourtGame(id)) {
+          toast.success(`${court.name} 게임이 취소되었습니다`);
+        }
       }
     },
     [courts, cancelCourtGame],
   );
 
   const handleMoveCourtGame = useCallback(
-    (fromCourtId: string, toCourtId: string) => {
+    async (fromCourtId: string, toCourtId: string) => {
       const from = courts.find((c) => c.id === fromCourtId);
       const to = courts.find((c) => c.id === toCourtId);
       if (!from?.playerIds || !to) return;
-      moveCourtGame(fromCourtId, toCourtId);
-      toast.success(to.playerIds ? `${from.name} ↔ ${to.name} 게임을 맞바꿨습니다` : `${to.name}에 게임을 옮겼습니다`);
+      if (await moveCourtGame(fromCourtId, toCourtId)) {
+        toast.success(
+          to.playerIds ? `${from.name} ↔ ${to.name} 게임을 맞바꿨습니다` : `${to.name}에 게임을 옮겼습니다`,
+        );
+      }
     },
     [courts, moveCourtGame],
   );
@@ -245,15 +259,15 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   );
 
   const handleToggleStatus = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const player = players.find((p) => p.id === id);
       if (!player) return;
       if (player.status === 'active') {
-        updatePlayer(id, { status: 'resting', pinned: false, waitingSince: null });
-        toast.success(`${player.name} 선수가 휴식 상태로 변경되었습니다`);
         if (pickedPlayers?.some((p) => p.id === id)) setPickedPlayers(null);
-      } else {
-        updatePlayer(id, { status: 'active', waitingSince: new Date().toISOString() });
+        if (await updatePlayer(id, { status: 'resting', pinned: false, waitingSince: null })) {
+          toast.success(`${player.name} 선수가 휴식 상태로 변경되었습니다`);
+        }
+      } else if (await updatePlayer(id, { status: 'active', waitingSince: new Date().toISOString() })) {
         toast.success(`${player.name} 선수가 활성 상태로 변경되었습니다`);
       }
     },
@@ -289,68 +303,74 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   );
 
   const handleBulkAttending = useCallback(
-    (attendingIds: string[]) => {
-      setAttendingBulk(attendingIds);
-      toast.success(`오늘 참석자 ${attendingIds.length}명이 설정되었습니다`);
+    async (attendingIds: string[]) => {
       setPickedPlayers(null);
+      if (await setAttendingBulk(attendingIds)) {
+        toast.success(`오늘 참석자 ${attendingIds.length}명이 설정되었습니다`);
+      }
     },
     [setAttendingBulk],
   );
 
   const handleRemoveGame = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (confirm('이 게임 기록을 삭제하시겠습니까?')) {
-        removeGame(id);
-        toast.success('게임 기록이 삭제되었습니다');
+        if (await removeGame(id)) {
+          toast.success('게임 기록이 삭제되었습니다');
+        }
       }
     },
     [removeGame],
   );
 
-  const handleResetGames = useCallback(() => {
+  const handleResetGames = useCallback(async () => {
     if (games.length === 0) {
       toast.error('삭제할 게임 기록이 없습니다');
       return;
     }
     if (confirm('모든 게임 기록을 삭제하시겠습니까?\n(대기 중인 선수의 대기 시간도 함께 초기화됩니다)')) {
-      resetGames();
-      resetWaitingTimes();
-      toast.success('게임 기록과 대기 시간이 초기화되었습니다');
+      const [gamesReset, waitingReset] = await Promise.all([resetGames(), resetWaitingTimes()]);
+      if (gamesReset && waitingReset) {
+        toast.success('게임 기록과 대기 시간이 초기화되었습니다');
+      }
     }
   }, [games.length, resetGames, resetWaitingTimes]);
 
-  const handleResetPlayers = useCallback(() => {
+  const handleResetPlayers = useCallback(async () => {
     if (players.length === 0) {
       toast.error('삭제할 선수가 없습니다');
       return;
     }
     if (confirm('게스트로 등록된 선수 전원을 삭제하시겠습니까?\n(로그인 참가자는 유지됩니다)')) {
-      resetPlayers();
       setPickedPlayers(null);
-      toast.success('게스트 선수 목록이 초기화되었습니다');
+      if (await resetPlayers()) {
+        toast.success('게스트 선수 목록이 초기화되었습니다');
+      }
     }
   }, [players.length, resetPlayers]);
 
-  const handleResetAttendance = useCallback(() => {
+  const handleResetAttendance = useCallback(async () => {
     if (!players.some((p) => p.attending)) {
       toast.error('참석 처리된 선수가 없습니다');
       return;
     }
     if (confirm('모든 선수의 오늘 참석을 해제하시겠습니까?')) {
-      setAttendingBulk([]);
       setPickedPlayers(null);
-      toast.success('참석이 모두 해제되었습니다');
+      if (await setAttendingBulk([])) {
+        toast.success('참석이 모두 해제되었습니다');
+      }
     }
   }, [players, setAttendingBulk]);
 
-  const handleResetWaitingTimes = useCallback(() => {
+  const handleResetWaitingTimes = useCallback(async () => {
     if (!players.some((p) => p.status === 'active')) {
       toast.error('대기 중인 선수가 없습니다');
       return;
     }
     if (confirm('대기 중인 선수 전원의 대기 시간을 초기화하시겠습니까?')) {
-      resetWaitingTimes();
-      toast.success('대기 시간이 초기화되었습니다');
+      if (await resetWaitingTimes()) {
+        toast.success('대기 시간이 초기화되었습니다');
+      }
     }
   }, [players, resetWaitingTimes]);
 
