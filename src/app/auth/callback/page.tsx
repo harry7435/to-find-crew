@@ -19,20 +19,24 @@ export default function AuthCallbackPage() {
         }
 
         if (data.session) {
-          // 사용자 정보를 데이터베이스에 저장/업데이트
+          // 첫 로그인일 때만 사용자 행을 만든다. 이미 있는 행은 건드리지 않는다 —
+          // 매 로그인마다 덮어쓰면 프로필 페이지에서 바꾼 이름·사진이 소셜 계정 값으로 되돌아간다.
           const { user } = data.session;
 
-          const { error: upsertError } = await supabase.from('users').upsert({
-            id: user.id,
-            email: user.email || `kakao_${user.id}@temp.com`, // 카카오는 이메일 없을 수 있음
-            name:
-              user.user_metadata?.nickname ||
-              user.user_metadata?.full_name ||
-              user.user_metadata?.name ||
-              '카카오 사용자',
-            profile_image: user.user_metadata?.picture || user.user_metadata?.avatar_url,
-            provider: user.app_metadata?.provider || 'email',
-          });
+          const { error: upsertError } = await supabase.from('users').upsert(
+            {
+              id: user.id,
+              email: user.email || `kakao_${user.id}@temp.com`, // 카카오는 이메일 없을 수 있음
+              name:
+                user.user_metadata?.nickname ||
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                '카카오 사용자',
+              profile_image: user.user_metadata?.picture || user.user_metadata?.avatar_url,
+              provider: user.app_metadata?.provider || 'email',
+            },
+            { onConflict: 'id', ignoreDuplicates: true },
+          );
 
           if (upsertError) {
             console.error('User upsert error:', upsertError);

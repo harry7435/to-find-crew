@@ -1,11 +1,20 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+// users 테이블에 저장된 표시 정보. 소셜 계정 메타데이터(user.user_metadata)는 로그인 시점 값이라
+// 프로필 페이지에서 바꾼 이름·사진을 반영하지 못하므로, 화면 표시는 이 값을 우선한다.
+interface AuthProfile {
+  name: string | null;
+  profile_image: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
+  profile: AuthProfile | null;
+  refreshProfile: () => Promise<void>;
   loading: boolean;
   signInWithKakao: () => Promise<void>;
   signInWithEmail: (email: string) => Promise<void>;
@@ -17,6 +26,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<AuthProfile | null>(null);
+  const userId = user?.id;
+
+  // onAuthStateChange 콜백 안에서 supabase를 다시 호출하면 교착될 수 있어, 조회는 별도 effect로 뺀다.
+  const refreshProfile = useCallback(async () => {
+    if (!userId) {
+      setProfile(null);
+      return;
+    }
+    const { data } = await supabase.from('users').select('name, profile_image').eq('id', userId).maybeSingle();
+    setProfile(data ?? null);
+  }, [userId]);
+
+  useEffect(() => {
+    refreshProfile();
+  }, [refreshProfile]);
 
   useEffect(() => {
     // 초기 세션 확인
@@ -97,6 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     user,
+    profile,
+    refreshProfile,
     loading,
     signInWithKakao,
     signInWithEmail,

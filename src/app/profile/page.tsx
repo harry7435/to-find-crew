@@ -14,6 +14,7 @@ import { ArrowLeft, User, Camera } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -58,6 +59,7 @@ const validateImageFile = (file: File): { ok: true } | { ok: false; reason: stri
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { refreshProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -136,6 +138,8 @@ export default function ProfilePage() {
         throw error;
       }
 
+      // 헤더가 바뀐 이름을 바로 보여주도록 AuthContext의 표시 정보를 다시 불러온다.
+      await refreshProfile();
       toast.success('프로필이 업데이트되었습니다!');
       router.push('/');
     } catch (error) {
@@ -195,6 +199,7 @@ export default function ProfilePage() {
       }
 
       setProfileImageUrl(publicUrl);
+      await refreshProfile();
       toast.success('프로필 이미지가 업데이트되었습니다!');
     } catch (error) {
       console.error('Image upload error:', error);

@@ -24,7 +24,11 @@ const FEEDBACK_URL = 'https://open.kakao.com/o/s9oD9DIi';
 const HEADER_CLASS = 'border-b fixed bg-white top-0 w-full z-10';
 
 export default function Header() {
-  const { user, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
+
+  // users 테이블 값을 우선하고, 아직 못 불러왔으면 소셜 계정 메타데이터로 대신한다.
+  const displayName = profile?.name || user?.user_metadata?.nickname || user?.user_metadata?.full_name;
+  const avatarUrl = profile?.profile_image || user?.user_metadata?.picture || user?.user_metadata?.avatar_url;
 
   const handleSignOut = async () => {
     try {
@@ -88,12 +92,9 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.user_metadata?.picture || user.user_metadata?.avatar_url} />
+                      <AvatarImage src={avatarUrl} />
                       <AvatarFallback>
-                        {user.user_metadata?.nickname?.slice(0, 2) ||
-                          user.user_metadata?.full_name?.slice(0, 2) ||
-                          user.email?.slice(0, 2).toUpperCase() ||
-                          '🏸'}
+                        {displayName?.slice(0, 2) || user.email?.slice(0, 2).toUpperCase() || '🏸'}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
@@ -101,9 +102,7 @@ export default function Header() {
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <div className="flex items-center justify-start gap-2 p-2">
                     <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium text-sm">
-                        {user.user_metadata?.nickname || user.user_metadata?.full_name || user.email}
-                      </p>
+                      <p className="font-medium text-sm">{displayName || user.email}</p>
                       <p className="text-xs text-muted-foreground">
                         {user.email?.includes('@temp.com') ? '카카오 로그인' : user.email}
                       </p>
