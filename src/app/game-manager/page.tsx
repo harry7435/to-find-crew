@@ -259,13 +259,20 @@ export default function GameManagerPage() {
     setIsCustomPicking(true);
   }, []);
 
+  // 직접 고른 4명은 선택 화면이 이미 코트 박스 미리보기로 보여주므로, 랜덤 뽑기처럼 결과 확인
+  // 단계를 한 번 더 거치지 않고 확정 한 번으로 대기열에 넣는다.
   const handleCustomConfirm = useCallback(() => {
     if (selectedPlayers.length !== 4) return;
-    setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
+    const playerIds = selectedPlayers.map((p) => p.id) as [string, string, string, string];
+    enqueueGame(playerIds);
+    toast.success('대기열에 추가되었습니다', {
+      description: `선수: ${selectedPlayers.map((p) => p.name).join(', ')}`,
+    });
     setIsCustomPicking(false);
+    setPickedPlayers(null);
     setSelectedPlayers([]);
     setIsEditingCustomPick(false);
-  }, [selectedPlayers]);
+  }, [selectedPlayers, enqueueGame]);
 
   const handleCustomCancel = useCallback(() => {
     setIsCustomPicking(false);

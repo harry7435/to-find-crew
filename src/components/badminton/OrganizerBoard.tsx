@@ -234,13 +234,27 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     setIsCustomPicking(true);
   }, []);
 
-  const handleCustomConfirm = useCallback(() => {
+  // 직접 고른 4명은 선택 화면이 이미 코트 박스 미리보기로 보여주므로, 랜덤 뽑기처럼 결과 확인
+  // 단계를 한 번 더 거치지 않고 확정 한 번으로 대기열에 넣는다.
+  const handleCustomConfirm = useCallback(async () => {
     if (selectedPlayers.length !== 4) return;
-    setPickedPlayers(selectedPlayers as [Player, Player, Player, Player]);
+    const picked = selectedPlayers;
+    const playerIds = picked.map((p) => p.id) as [string, string, string, string];
+    // 응답을 기다리는 동안 확정이 다시 눌리지 않도록 선택 화면을 먼저 닫고,
+    // 실패하면 고른 4명 그대로 선택 화면을 되살려 바로 다시 시도할 수 있게 한다.
     setIsCustomPicking(false);
+    setPickedPlayers(null);
     setSelectedPlayers([]);
     setIsEditingCustomPick(false);
-  }, [selectedPlayers]);
+    if (await enqueueGame(playerIds)) {
+      toast.success('대기열에 추가되었습니다', {
+        description: `선수: ${picked.map((p) => p.name).join(', ')}`,
+      });
+    } else {
+      setSelectedPlayers(picked);
+      setIsCustomPicking(true);
+    }
+  }, [selectedPlayers, enqueueGame]);
 
   const handleCustomCancel = useCallback(() => {
     setIsCustomPicking(false);
