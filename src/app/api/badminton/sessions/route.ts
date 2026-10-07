@@ -122,10 +122,10 @@ export async function GET(request: NextRequest) {
       .select(
         `
         *,
-        creator:users!creator_id(id, name, email),
+        creator:users!creator_id(id, name),
         session_participants(
           id,
-          user:users(id, name, email, gender, skill_level)
+          user:users(id, name, gender, skill_level)
         )
       `,
       )

@@ -677,3 +677,30 @@ CREATE POLICY "Session organizers can manage session participant overrides" ON s
 -- Realtime 활성화 + DELETE 이벤트에도 session_id가 실리도록 REPLICA IDENTITY FULL
 ALTER PUBLICATION supabase_realtime ADD TABLE session_participant_overrides;
 ALTER TABLE session_participant_overrides REPLICA IDENTITY FULL;
+
+-- ============================================================
+-- users 연락처(email, phone) 조회 제한
+-- ============================================================
+
+-- RLS는 행 단위라 "Users can read all users" 정책만으로는 email·phone 열을 가릴 수 없다.
+-- 다른 이용자에게 보여도 되는 열에만 조회 권한을 주고, email·phone·provider는 뺀다.
+-- (INSERT/UPDATE 권한은 그대로라 본인 행 생성·수정은 기존 RLS 정책대로 동작한다.)
+-- 주의: 이 뒤로 users에 select('*')를 쓰거나 email/phone을 조회하면 권한 오류가 난다.
+REVOKE SELECT ON users FROM anon, authenticated;
+GRANT SELECT (id, name, profile_image, bio, gender, skill_level, created_at, updated_at)
+  ON users TO anon, authenticated;
+
+-- 열 권한은 "본인 행만 허용"을 표현할 수 없으므로, 로그인한 본인의 연락처만 돌려주는
+-- 함수를 따로 둔다. 프로필 페이지가 이메일 표시와 전화번호 폼 채우기에 사용한다.
+CREATE OR REPLACE FUNCTION get_my_contact()
+RETURNS TABLE (email TEXT, phone TEXT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT u.email, u.phone FROM users u WHERE u.id = auth.uid();
+$$;
+
+REVOKE EXECUTE ON FUNCTION get_my_contact() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION get_my_contact() TO authenticated;

@@ -46,7 +46,7 @@ export async function GET() {
       .select(
         `
         *,
-        creator:users!creator_id(id, name, email),
+        creator:users!creator_id(id, name),
         session_participants(id),
         guest_participants(id)
       `,

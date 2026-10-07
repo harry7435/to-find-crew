@@ -19,7 +19,7 @@ interface Session {
   court_count: number;
   participant_count: number;
   created_at: string;
-  creator: { id: string; name: string; email: string };
+  creator: { id: string; name: string };
   role: 'creator' | 'organizer' | 'participant';
 }
 

@@ -22,7 +22,6 @@ export interface BadmintonSession {
   creator?: {
     id: string;
     name: string;
-    email: string;
     profile_image?: string;
   };
   session_participants?: SessionParticipant[];
@@ -40,7 +39,6 @@ export interface SessionParticipant {
   user: {
     id: string;
     name: string;
-    email: string;
     profile_image?: string;
     gender?: 'male' | 'female' | 'other';
     skill_level?: number;

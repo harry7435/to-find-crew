@@ -41,7 +41,7 @@ export default function InvitePage() {
           .select(
             `
             *,
-            creator:users!creator_id(id, name, email),
+            creator:users!creator_id(id, name),
             session_participants(id, user_id),
             guest_participants(id)
           `,

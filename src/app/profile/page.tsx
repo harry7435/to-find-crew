@@ -91,11 +91,22 @@ export default function ProfilePage() {
           return;
         }
 
-        const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
+        // email·phone은 users 테이블에서 열 단위로 조회가 막혀 있어(다른 이용자에게 노출 방지)
+        // select('*')를 쓰면 권한 오류가 난다. 본인 연락처는 get_my_contact() 함수로만 읽는다.
+        const [profileResult, contactResult] = await Promise.all([
+          supabase.from('users').select('id, name, profile_image, bio, gender, skill_level').eq('id', user.id).single(),
+          supabase.rpc('get_my_contact').maybeSingle<{ email: string; phone: string | null }>(),
+        ]);
 
-        if (error) {
-          throw error;
+        // 연락처를 못 읽은 채 폼을 열면 저장할 때 기존 전화번호를 빈 값으로 덮어쓰게 되므로 함께 실패 처리한다.
+        if (profileResult.error) {
+          throw profileResult.error;
         }
+        if (contactResult.error || !contactResult.data) {
+          throw contactResult.error ?? new Error('연락처 정보를 불러올 수 없습니다');
+        }
+
+        const data: UserProfile = { ...profileResult.data, ...contactResult.data };
 
         setProfile(data);
         setProfileImageUrl(data.profile_image);

@@ -16,7 +16,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         creator:users!creator_id(
           id,
           name,
-          email,
           profile_image
         ),
         session_participants(
@@ -27,7 +26,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           user:users(
             id,
             name,
-            email,
             profile_image,
             gender,
             skill_level
