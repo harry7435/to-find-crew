@@ -16,3 +16,9 @@
   under-14 verification or optional consent items appear. Keep both routes reachable: they were
   linked from that sentence for a while before the pages existed, which meant the app claimed to
   collect consent to documents that 404'd.
+- The trigger is **any new personal data the service collects, not only new table columns.** Email
+  signup now collects a name and an optional password that live in Supabase Auth (not in `users`);
+  the policy's §1 already lists both, which is the pattern to follow. When the policy text changes,
+  also bump `effectiveDate` in `src/app/privacy/page.tsx` (it was bumped to 2026-10-08 for the
+  password line). `src/app/terms/page.tsx` has its own `effectiveDate`; bump it only when the terms
+  text itself changes.

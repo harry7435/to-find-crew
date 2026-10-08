@@ -14,8 +14,9 @@
 
 ## Database Schema Conventions (`supabase-schema.sql`)
 
-- `supabase-schema.sql` is the single hand-maintained source of truth for schema (no migration
-  tool/ORM). Changes get pasted into the Supabase dashboard SQL editor manually.
+- `supabase-schema.sql` is the single hand-maintained source of truth for the *intended* schema (no
+  migration tool/ORM). Changes get pasted into the Supabase dashboard SQL editor manually, so the live
+  DB can drift from the file — query it before trusting the file (see the `users` bullet below).
 - **Additive-only convention:** when adding features, only use `CREATE TABLE` (plus supporting
   `CREATE INDEX` / RLS policies for the *new* tables). Do not `ALTER TABLE` or `DROP TABLE` on existing
   tables without explicit sign-off — this is an explicit, repeated user preference. Examples: the board
@@ -23,6 +24,12 @@
   session-scoped display-info override feature (see below) added `session_participant_overrides` —
   both rather than adding columns to existing tables (`session_participants`, `users`) or reusing old
   table structures (`teams`/`games`).
+- **`users` has column-level `SELECT` grants, and the live DB differs from this file in places.**
+  `select('*')` or selecting `email`/`phone`/`provider` on `users` errors with permission denied
+  (owner contact: `rpc('get_my_contact')`); `gm_*` tables exist only in the DB. Privilege
+  (`GRANT`/`REVOKE`) and RLS-policy changes on existing tables need the same explicit sign-off as
+  `ALTER TABLE`, and `pg_policies` must be queried before editing any policy. See
+  `docs/gotchas/users-table-column-grants.md`.
 - **Realtime gotchas** — `CREATE TABLE` alone does not make a table broadcast over Supabase Realtime.
   Two extra steps are required for any new table that needs live updates:
   1. `ALTER PUBLICATION supabase_realtime ADD TABLE <table_name>;`
@@ -52,9 +59,10 @@
   also registered in the Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
   allow-list. If it isn't, Supabase silently falls back to the dashboard's configured Site URL
   instead — the app's `/auth/callback` page (and any logic living there, e.g. the Game Manager
-  Login Migration flag check below) is never visited at all. The Supabase JS client's default
-  `detectSessionInUrl` behavior then auto-completes the session on whatever page it lands on, so
-  login *appears* to succeed while completely bypassing the callback page. This is a silent
+  Login Migration flag check below and first-login `users` row creation) is never visited at all.
+  The Supabase JS client's default `detectSessionInUrl` behavior then auto-completes the session on
+  whatever page it lands on, so login *appears* to succeed while completely bypassing the callback
+  page. This is a silent
   failure mode like the Realtime gotchas above — no error anywhere. Diagnose via the browser
   Network tab: if the final redirect lands on `/` (or wherever Site URL points) with a bare
   `?code=...` instead of on `/auth/callback`, this is the cause — fix in the Supabase Dashboard,
@@ -108,8 +116,9 @@
 
 ## Legal Pages (`/terms`, `/privacy`)
 
-- Hand-written documents that must be updated in the same change whenever a schema change adds a
-  personal-data field or a new third-party service is integrated — no lint/test catches the drift.
+- Hand-written documents that must be updated in the same change whenever a schema change or a
+  signup/auth change (e.g. a new credential or profile field collected at login) adds a personal-data
+  field, or a new third-party service is integrated — no lint/test catches the drift.
   See `docs/gotchas/legal-pages-maintenance.md` for what exactly to check and why.
 
 ## Git Workflow
@@ -125,6 +134,15 @@
   mount effect → `MigrateModal.tsx`) sharing a flag with a single-consumer rule that's easy to
   accidentally break. See `docs/gotchas/game-manager-login-migration.md` before touching any of
   those 4 files.
+
+## Auth Profile & Email Onboarding
+
+- Header name/photo come from `AuthContext.profile` (the `users` table), never raw OAuth
+  `user_metadata`, and `/auth/callback` must only *create* the `users` row, never overwrite it.
+  Email-signup onboarding flags live in auth `user_metadata` (UX-only, never authz), and any modal
+  that opens on load/login must stay closed while `emailOnboarding.isPending`. See
+  `docs/gotchas/auth-profile-and-email-onboarding.md` before touching `AuthContext`, the callback, or
+  adding a login/mount-time modal.
 
 ## Spectator Board Read-Only Duplication Pattern
 
@@ -145,9 +163,11 @@
 
 - Several repeated, load-bearing patterns in the board components: controlled-prop lifting for
   cross-component shared UI state, `boundedOnDesktop` layout-budget delegation, `TeamCourtBox`'s two
-  independent color channels (gender vs. team side), and `waiting_since` reset rules around
-  `enqueueGame`. See `docs/gotchas/game-manager-board-conventions.md` before "simplifying" any of
-  `CustomTeamPicker.tsx`, `TeamCourtBox.tsx`, or either hook's `enqueueGame()`.
+  independent color channels (gender vs. team side), `waiting_since` reset rules around
+  `enqueueGame`, and the write-failure contract of `useBoardRealtime` (writes return
+  `Promise<boolean>`, multi-step writes keep a recoverable order). See
+  `docs/gotchas/game-manager-board-conventions.md` before "simplifying" any of `CustomTeamPicker.tsx`,
+  `TeamCourtBox.tsx`, either hook's `enqueueGame()`, or reordering `useBoardRealtime` writes.
 
 ## Invite Flow: Guest/Login Duplicate-Participant Prevention
 
