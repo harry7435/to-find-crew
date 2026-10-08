@@ -191,8 +191,18 @@ export function useBoardRealtime(sessionId: string) {
         }
       });
 
+    // 모바일(특히 PWA)은 백그라운드로 가면 소켓이 멈추거나 끊기고, 그동안의 이벤트는 다시 오지 않는다.
+    // 재구독이 감지되지 않는 경우에도 최신 상태가 보이도록 화면 복귀·네트워크 복구 시 직접 다시 받는다.
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible') loadSnapshot();
+    };
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    window.addEventListener('online', refreshOnReturn);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+      window.removeEventListener('online', refreshOnReturn);
       supabase.removeChannel(channel);
     };
   }, [sessionId, loadSnapshot]);
