@@ -6,13 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
-  const { signInWithKakao, signInWithEmail } = useAuth();
+  const router = useRouter();
+  // 비밀번호가 기본 로그인 수단이고, 메일 링크는 비밀번호가 없거나 잊었을 때(그리고 첫 가입)의 경로다.
+  const [emailMode, setEmailMode] = useState<'password' | 'link'>('password');
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const { signInWithKakao, signInWithEmail, signInWithPassword } = useAuth();
 
   const handleKakaoLogin = async () => {
     try {
@@ -47,6 +53,34 @@ export default function LoginPage() {
       toast.error('이메일 전송에 실패했습니다', {
         description: '다시 시도해주세요',
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setPasswordError('이메일과 비밀번호를 입력해주세요');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setPasswordError(null);
+      await signInWithPassword(email.trim(), password);
+      // 로그인 후 처리(users 행 생성, 게임 매니저 마이그레이션 대기 시 이동)는 콜백 페이지가
+      // 이미 하고 있으므로 그쪽으로 보내 한 곳에서 처리한다.
+      router.replace('/auth/callback');
+    } catch (error) {
+      // Supabase는 비밀번호가 틀린 경우와 비밀번호를 설정한 적 없는 경우를 구분해 주지 않는다.
+      // 네트워크 오류나 요청 제한까지 "비밀번호가 틀렸다"고 안내하지는 않는다.
+      const isInvalidCredentials = (error as { code?: string } | null)?.code === 'invalid_credentials';
+      setPasswordError(
+        isInvalidCredentials
+          ? '이메일 또는 비밀번호가 올바르지 않습니다'
+          : '로그인에 실패했습니다. 잠시 후 다시 시도해주세요',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -133,33 +167,98 @@ export default function LoginPage() {
                 </div>
 
                 {/* 이메일 로그인 폼 */}
-                <form onSubmit={handleEmailLogin} className="space-y-3">
-                  <div>
-                    <label htmlFor="email" className="sr-only">
-                      이메일
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="이메일 주소"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !email.trim()}
-                    variant="outline"
-                    className="w-full border border-gray-300"
-                  >
-                    {isLoading ? '전송 중...' : '이메일로 로그인'}
-                  </Button>
-                </form>
+                {emailMode === 'password' ? (
+                  <form onSubmit={handlePasswordLogin} className="space-y-3">
+                    <div>
+                      <label htmlFor="email" className="sr-only">
+                        이메일
+                      </label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="이메일 주소"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="password" className="sr-only">
+                        비밀번호
+                      </label>
+                      <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="비밀번호"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
+                    <Button
+                      type="submit"
+                      disabled={isLoading || !email.trim() || !password}
+                      variant="outline"
+                      className="w-full border border-gray-300"
+                    >
+                      {isLoading ? '로그인 중...' : '이메일로 로그인'}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailMode('link');
+                        setPasswordError(null);
+                      }}
+                      className="block w-full text-center text-xs text-gray-600 underline"
+                    >
+                      처음이시거나 비밀번호를 잊으셨나요? 이메일로 로그인 링크 받기
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleEmailLogin} className="space-y-3">
+                    <div>
+                      <label htmlFor="email" className="sr-only">
+                        이메일
+                      </label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="이메일 주소"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={isLoading || !email.trim()}
+                      variant="outline"
+                      className="w-full border border-gray-300"
+                    >
+                      {isLoading ? '전송 중...' : '로그인 링크 받기'}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setEmailMode('password')}
+                      className="block w-full text-center text-xs text-gray-600 underline"
+                    >
+                      비밀번호로 로그인
+                    </button>
+                  </form>
+                )}
               </>
             )}
 

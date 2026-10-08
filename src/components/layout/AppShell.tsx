@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Header from './Header';
 import Footer from './Footer';
+import EmailOnboardingModal from '@/components/auth/EmailOnboardingModal';
 
 // 자체적으로 헤더를 관리하는(또는 헤더 없이 몰입형으로 보여줘야 하는) 라우트는
 // 전역 헤더 대상에서 제외한다.
@@ -47,6 +48,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Header />
       <div className="flex flex-1 flex-col pt-16">{children}</div>
       {showFooter && <Footer />}
+      {/* 이메일 가입자 온보딩. 헤더 없는 라우트(/auth/login, /auth/callback, /random-picker)는
+          위의 분기에서 이미 빠져나가므로 로그인 처리 중이나 뽑기 화면에는 뜨지 않는다. */}
+      <EmailOnboardingModal />
     </div>
   );
 }

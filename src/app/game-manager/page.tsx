@@ -21,6 +21,7 @@ import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
 import MigrateBanner from '@/components/game-manager/MigrateBanner';
 import MigrateModal from '@/components/game-manager/MigrateModal';
+import { useAuth } from '@/contexts/AuthContext';
 import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
 
 export default function GameManagerPage() {
@@ -69,6 +70,7 @@ export default function GameManagerPage() {
     resetActions: false,
   });
   const [isMigrateModalOpen, setIsMigrateModalOpen] = useState(false);
+  const { emailOnboarding } = useAuth();
 
   // 로그인 콜백에서 돌아왔는데 플래그가 아직 남아있는 예외 상황 대비
   useEffect(() => {
@@ -777,7 +779,13 @@ export default function GameManagerPage() {
         onConfirm={handleBulkAttending}
       />
 
-      <MigrateModal isOpen={isMigrateModalOpen} onClose={() => setIsMigrateModalOpen(false)} players={players} />
+      {/* 이메일로 처음 가입해 돌아온 사람은 온보딩 모달이 함께 뜬다. 온보딩을 먼저 보여주고,
+          끝나거나 닫히면 이어서 띄운다(열림 상태 자체는 그대로 두므로 플래그 처리와 무관하다). */}
+      <MigrateModal
+        isOpen={isMigrateModalOpen && !emailOnboarding.isPending}
+        onClose={() => setIsMigrateModalOpen(false)}
+        players={players}
+      />
     </div>
   );
 }

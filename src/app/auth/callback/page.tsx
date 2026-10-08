@@ -22,6 +22,10 @@ export default function AuthCallbackPage() {
           // 첫 로그인일 때만 사용자 행을 만든다. 이미 있는 행은 건드리지 않는다 —
           // 매 로그인마다 덮어쓰면 프로필 페이지에서 바꾼 이름·사진이 소셜 계정 값으로 되돌아간다.
           const { user } = data.session;
+          // 이름을 못 받은 경우의 임시값. 이메일 가입자는 곧 온보딩 모달에서 직접 입력하지만,
+          // 모달을 닫은 사람에게도 카카오 전용 문구가 아니라 provider에 맞는 값이 보이게 한다.
+          const isKakao = user.app_metadata?.provider === 'kakao';
+          const emailLocalPart = user.email?.split('@')[0];
 
           const { error: upsertError } = await supabase.from('users').upsert(
             {
@@ -31,7 +35,8 @@ export default function AuthCallbackPage() {
                 user.user_metadata?.nickname ||
                 user.user_metadata?.full_name ||
                 user.user_metadata?.name ||
-                '카카오 사용자',
+                (isKakao ? '카카오 사용자' : emailLocalPart) ||
+                '사용자',
               profile_image: user.user_metadata?.picture || user.user_metadata?.avatar_url,
               provider: user.app_metadata?.provider || 'email',
             },
