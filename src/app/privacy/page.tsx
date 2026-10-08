@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 8월 14일">
+    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 10월 8일">
       <p>
         To Find Crew(이하 &ldquo;서비스&rdquo;)는 「개인정보 보호법」에 따라 이용자의 개인정보를 보호하고 이와 관련한
         고충을 신속하게 처리할 수 있도록 다음과 같이 개인정보처리방침을 수립·공개합니다.
@@ -18,7 +18,10 @@ export default function PrivacyPage() {
         <p className="font-medium text-gray-900">가. 회원 가입 시 (소셜 로그인 · 이메일 로그인)</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>필수: 이메일 주소, 이름(또는 닉네임), 로그인 제공자 구분(구글 / 카카오 / 이메일)</li>
-          <li>선택: 프로필 이미지, 자기소개, 성별, 배드민턴 급수, 휴대전화번호</li>
+          <li>
+            선택: 프로필 이미지, 자기소개, 성별, 배드민턴 급수, 휴대전화번호, 비밀번호(이메일 로그인에서 설정한 경우에
+            한하며 암호화되어 저장됩니다)
+          </li>
         </ul>
         <p className="mt-2">
           구글·카카오 계정으로 로그인하는 경우, 해당 사업자로부터 이용자가 동의한 범위의 정보(이메일, 이름 또는 닉네임,

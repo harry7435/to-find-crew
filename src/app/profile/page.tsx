@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AuthGuard from '@/components/auth/AuthGuard';
+import PasswordSection from '@/components/auth/PasswordSection';
 import { ArrowLeft, User, Camera } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -59,7 +60,7 @@ const validateImageFile = (file: File): { ok: true } | { ok: false; reason: stri
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { refreshProfile } = useAuth();
+  const { user: authUser, refreshProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -151,6 +152,12 @@ export default function ProfilePage() {
 
       // 헤더가 바뀐 이름을 바로 보여주도록 AuthContext의 표시 정보를 다시 불러온다.
       await refreshProfile();
+      // 이메일 가입자가 온보딩 모달을 닫고 여기서 이름을 정했다면 그것도 "이름을 직접 입력함"이다.
+      // 기록하지 않으면 브라우저를 새로 열 때마다 모달이 이름을 다시 묻는다. 실패해도 저장 자체는
+      // 성공이므로 무시한다(다음 방문에 모달이 한 번 더 뜰 뿐이다).
+      if (authUser?.app_metadata?.provider === 'email' && !authUser.user_metadata?.name_confirmed) {
+        await supabase.auth.updateUser({ data: { name_confirmed: true } });
+      }
       toast.success('프로필이 업데이트되었습니다!');
       router.push('/');
     } catch (error) {
@@ -394,6 +401,8 @@ export default function ProfilePage() {
             </form>
           </CardContent>
         </Card>
+
+        <PasswordSection />
       </div>
     </AuthGuard>
   );

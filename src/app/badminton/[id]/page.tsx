@@ -20,7 +20,7 @@ import { QRCodeSVG } from 'qrcode.react';
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, emailOnboarding } = useAuth();
   const router = useRouter();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
@@ -412,7 +412,9 @@ export default function SessionDetailPage() {
       {/* 사용자 정보 입력 모달 (로그인한 사용자만) */}
       {user && (
         <UserInfoModal
-          isOpen={showUserInfoModal}
+          // 이메일 가입자가 초대 링크로 처음 들어오면 온보딩 모달과 동시에 뜰 수 있다.
+          // 온보딩을 먼저 보여주고, 끝나거나 닫히면 이어서 띄운다.
+          isOpen={showUserInfoModal && !emailOnboarding.isPending}
           onClose={() => setShowUserInfoModal(false)}
           onSubmit={handleUserInfoSubmit}
           isLoading={isUpdatingProfile}
