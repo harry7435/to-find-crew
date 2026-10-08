@@ -11,7 +11,7 @@ import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Calendar, History, LogOut, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
+import { ArrowLeft, Calendar, Eye, History, LogOut, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +31,8 @@ export default function SessionDetailPage() {
   const [showQRCode, setShowQRCode] = useState(false);
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  // 운영진이 참가자에게 보이는 현황판을 그대로 확인하는 보기 전용 모드. 새로고침하면 게임 관리로 돌아온다.
+  const [isViewOnly, setIsViewOnly] = useState(false);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -286,6 +288,7 @@ export default function SessionDetailPage() {
     !isCreator &&
     session.status !== 'completed' &&
     (session.session_participants ?? []).some((p) => p.user_id === user.id);
+  const showOrganizerBoard = isOrganizer && !isViewOnly;
 
   return (
     <>
@@ -345,14 +348,22 @@ export default function SessionDetailPage() {
           </div>
         </div>
 
-        {/* 게임 관리 (모임장) / 실시간 현황판 (그 외 전원) */}
-        <div className="shrink-0 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{isOrganizer ? '게임 관리' : '실시간 현황판'}</h2>
+        {/* 게임 관리 (운영진) / 실시간 현황판 (그 외 전원, 운영진의 보기 전용 모드) */}
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-y-1">
+          <h2 className="text-lg font-semibold">{showOrganizerBoard ? '게임 관리' : '실시간 현황판'}</h2>
           {isOrganizer && session.status !== 'completed' && (
-            <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
-              <History className="h-4 w-4 mr-1" />
-              게임 기록 · 초기화
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" onClick={() => setIsViewOnly((prev) => !prev)}>
+                {isViewOnly ? <Settings className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                {isViewOnly ? '게임 관리로 돌아가기' : '현황판 보기'}
+              </Button>
+              {!isViewOnly && (
+                <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
+                  <History className="h-4 w-4 mr-1" />
+                  게임 기록 · 초기화
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -361,7 +372,7 @@ export default function SessionDetailPage() {
             <p className="text-sm text-gray-500">
               종료된 모임입니다. {isOrganizer ? '게임 관리' : '현황판'} 기능은 사용할 수 없습니다.
             </p>
-          ) : isOrganizer ? (
+          ) : showOrganizerBoard ? (
             <OrganizerBoard
               sessionId={session.id}
               isMoreSheetOpen={isMoreSheetOpen}

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Player, GameRecord } from '@/hooks/useGameManager';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, Check, Clock } from 'lucide-react';
+import { Star, Check, Clock, Trophy } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
 import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
@@ -200,6 +200,11 @@ export default function CustomTeamPicker({
                             {waitingLabel}
                           </Badge>
                         )}
+                        {/* 인원 풀과 달리 0게임도 보여준다 — 누가 덜 뛰었는지 비교하는 화면이라서 */}
+                        <span className="flex items-center gap-1 text-xs text-gray-600">
+                          <Trophy className="h-3 w-3" />
+                          {getGameCount(player.id, games)}게임
+                        </span>
                       </div>
                       {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
                     </button>

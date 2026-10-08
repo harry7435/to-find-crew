@@ -62,8 +62,8 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
   const getPlayer = (playerId: string): Player =>
     players.find((p) => p.id === playerId) ?? { ...UNKNOWN_PLAYER, id: playerId };
 
-  // Show last 10 games
-  const recentGames = [...games].reverse().slice(0, 10);
+  // 최신순 전체 — 스크롤 영역은 이 컴포넌트를 담는 쪽이 정한다
+  const recentGames = [...games].reverse();
 
   return (
     <Tabs defaultValue="games" className="w-full">
@@ -100,7 +100,6 @@ export default function GameHistory({ games, players, onRemoveGame }: GameHistor
             </div>
           );
         })}
-        {games.length > 10 && <p className="text-center text-xs text-gray-500 mt-4">최근 10개 게임만 표시됩니다</p>}
       </TabsContent>
 
       <TabsContent value="stats" className="space-y-4 mt-3">

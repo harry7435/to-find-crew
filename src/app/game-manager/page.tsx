@@ -718,7 +718,7 @@ export default function GameManagerPage() {
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 max-h-[60vh] overflow-y-auto scroll-fade">
               <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
             </CardContent>
           </CollapsibleContent>

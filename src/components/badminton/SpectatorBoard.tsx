@@ -104,7 +104,7 @@ export default function SpectatorBoard({ sessionId }: SpectatorBoardProps) {
 
   const rosterPlayers = [...players].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
-  const recentGames = [...games].reverse().slice(0, 10);
+  const recentGames = [...games].reverse();
 
   return (
     <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
@@ -283,9 +283,6 @@ export default function SpectatorBoard({ sessionId }: SpectatorBoardProps) {
                       </div>
                     );
                   })}
-                  {games.length > 10 && (
-                    <p className="text-center text-xs text-gray-500 mt-2">최근 10개 게임만 표시됩니다</p>
-                  )}
                 </div>
               )}
             </div>
