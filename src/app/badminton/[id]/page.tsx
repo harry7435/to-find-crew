@@ -11,7 +11,7 @@ import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Calendar, History, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
+import { ArrowLeft, Calendar, History, LogOut, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +30,7 @@ export default function SessionDetailPage() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -145,6 +146,37 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleLeaveSession = async () => {
+    if (!confirm('이 모임 참가를 취소하시겠습니까?')) return;
+
+    setIsLeaving(true);
+    try {
+      const response = await fetch('/api/badminton/sessions/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(
+          result.code === 'IN_GAME'
+            ? '게임 중이거나 대기열에 있을 때는 참가를 취소할 수 없습니다'
+            : '참가 취소에 실패했습니다',
+        );
+        return;
+      }
+
+      toast.success('참가를 취소했습니다');
+      router.push('/badminton/my-sessions');
+    } catch (error) {
+      console.error('Leave session error:', error);
+      toast.error('참가 취소에 실패했습니다');
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
   const copyAccessCode = () => {
     if (session?.access_code) {
       navigator.clipboard.writeText(session.access_code);
@@ -238,6 +270,12 @@ export default function SessionDetailPage() {
 
   const isCreator = user?.id === session.creator_id;
   const isOrganizer = isCreator || (!!user && (session.session_organizers ?? []).some((o) => o.user_id === user.id));
+  // 모임장은 나갈 수 없고(모임 삭제는 모임 관리에서), 게스트는 본인 확인 수단이 없어 운영진이 빼준다.
+  const canLeave =
+    !!user &&
+    !isCreator &&
+    session.status !== 'completed' &&
+    (session.session_participants ?? []).some((p) => p.user_id === user.id);
 
   return (
     <>
@@ -282,6 +320,18 @@ export default function SessionDetailPage() {
               <Share2 className="h-3.5 w-3.5 mr-1" />
               공유
             </Button>
+            {canLeave && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLeaveSession}
+                disabled={isLeaving}
+                className="text-xs text-red-600 hover:text-red-700"
+              >
+                <LogOut className="h-3.5 w-3.5 mr-1" />
+                참가 취소
+              </Button>
+            )}
           </div>
         </div>
 

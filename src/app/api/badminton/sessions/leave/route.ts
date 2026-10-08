@@ -11,6 +11,7 @@ const ERROR_MESSAGES = {
   SESSION_COMPLETED: 'Cannot leave a completed session',
   CREATOR_CANNOT_LEAVE: 'Creator cannot leave the session',
   NOT_PARTICIPANT: 'You are not a participant of this session',
+  IN_GAME: 'Cannot leave while playing or queued',
 } as const;
 
 interface LeaveSessionRequest {
@@ -69,6 +70,18 @@ export async function POST(request: NextRequest) {
 
     if (participantError || !participant) {
       return NextResponse.json({ error: ERROR_MESSAGES.NOT_PARTICIPANT }, { status: 400 });
+    }
+
+    // 게임 중이거나 대기열에 있는 참가자가 빠지면 진행 중인 게임에 "알 수 없음" 선수가 남는다.
+    // 게임이 끝나거나 대기열에서 빠진 뒤에만 취소할 수 있게 한다.
+    const { data: boardState } = await supabase
+      .from('board_player_state')
+      .select('player_status')
+      .eq('session_participant_id', participant.id)
+      .maybeSingle();
+
+    if (boardState?.player_status === 'playing' || boardState?.player_status === 'queued') {
+      return NextResponse.json({ error: ERROR_MESSAGES.IN_GAME, code: 'IN_GAME' }, { status: 400 });
     }
 
     // 참가 취소
