@@ -73,3 +73,12 @@
   announced success. `loadSnapshot` in both board hooks likewise bails out without touching state
   when any of its reads fails — treating a failed read as `[]` blanked the board on a brief network
   drop. Simulate with DevTools → Network → Offline; a single-tab happy-path check proves nothing here.
+- **The organizer's "현황판 보기" toggle (`isViewOnly` in `src/app/badminton/[id]/page.tsx`) swaps
+  `OrganizerBoard` for `SpectatorBoard`, which unmounts the organizer board — every piece of its local
+  `useState` is lost on each toggle.** That is more than the players picked in `CustomTeamPicker`
+  before confirming: the left tab, attendance filter, expanded-queue state and open modals reset too.
+  Accepted trade-off, not a bug; server-backed state (courts, queue, games) is untouched. The toggle
+  itself is page-level `useState`, so a refresh returns to the management view. Don't "fix" it by
+  persisting or hiding-instead-of-unmounting unless the user asks — hiding would keep
+  `useBoardRealtime`'s subscription alive alongside the spectator's. The read-only guarantee of the
+  view-only mode is covered in `spectator-board-duplication.md`.

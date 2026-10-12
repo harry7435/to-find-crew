@@ -1,8 +1,11 @@
 # Spectator Board Read-Only Duplication Pattern
 
-- `/badminton/[id]` branches on `isOrganizer = user?.id === session.creator_id` to render either
+- `/badminton/[id]` branches on `showOrganizerBoard = isOrganizer && !isViewOnly` to render either
   `OrganizerBoard` (full read/write, via `useBoardRealtime`) or `SpectatorBoard` (read-only, via
-  `useBoardSpectator`) — see `src/app/badminton/[id]/page.tsx`.
+  `useBoardSpectator`) — see `src/app/badminton/[id]/page.tsx`. `isOrganizer` is the creator or a
+  `session_organizers` member; `isViewOnly` is the organizer's own "현황판 보기" toggle, so an
+  organizer can also land on `SpectatorBoard`. That view-only mode relies on the same guarantee as
+  everything below: it stays write-free only while `SpectatorBoard` keeps using `useBoardSpectator`.
 - **`useBoardRealtime` (`src/hooks/useBoardRealtime.ts`) and `useBoardSpectator`
   (`src/hooks/useBoardSpectator.ts`) intentionally duplicate their Supabase fetch/subscribe
   boilerplate (~20 lines: the 5-table `Promise.all` fetch + `postgres_changes` subscription
@@ -17,6 +20,20 @@
 - The two hooks also use different Supabase Realtime channel names on purpose —
   `board-${sessionId}` (organizer) vs `board-spectator-${sessionId}` (spectator) — so the two
   roles never share a channel subscription instance.
+- **The background-return refetch (`refreshOnReturn`) is a second duplicated surface, with a different
+  reason: consistency, not write safety.** It lives in `useBoardRealtime.ts`, `useBoardSpectator.ts`
+  and — not a hook — `src/app/badminton/[id]/page.tsx`, whose own `session-participants-${sessionId}`
+  channel (guest/session participants and organizers) calls `fetchSession()`. Each registers
+  `visibilitychange` (only when `visibilityState === 'visible'`) and `online` listeners that reload
+  the data. Reason (inferred from reading the code, not reproduced): an installed PWA that is
+  backgrounded can have its WebSocket suspended, Realtime may not notice, and events missed while
+  hidden are never replayed — the board silently keeps the old state. Don't remove the listeners as
+  "redundant with Realtime", and keep the trigger identical in all three places; a fix in only one
+  half-fixes the bug. A new realtime-backed hook or page needs the same pair.
+  Known gaps: (1) `loadSnapshot` has no sequencing, so overlapping calls (a Realtime reload racing a
+  visibility reload) can land out of order and an older snapshot can overwrite a newer one;
+  (2) not yet verified on a real installed PWA — to test, background it, change data from another
+  browser, then foreground it (desktop tab switching doesn't reliably reproduce this).
 - **Resolved (2026-08-11/12):** the old "인원 풀" vs. separate "참가자 목록" duplication noted above
   was the "UI 재설계" roadmap item (`docs/superpowers/specs/2026-07-14-board-persistence-design.md`
   로드맵 항목 4) — it shipped. `ParticipantsList.tsx` was deleted; `OrganizerBoard` now uses a single
