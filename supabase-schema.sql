@@ -704,3 +704,102 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION get_my_contact() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION get_my_contact() TO authenticated;
+
+-- ============================================================
+-- 내 차례 푸시 알림
+-- (docs/superpowers/specs/2026-11-02-game-turn-push-notification-design.md)
+-- 기기의 웹 푸시 구독을 모임의 참가자 한 명에 연결한다. endpoint는 그 기기에 알림을 보낼 수 있는
+-- 열쇠이므로 공개 조회를 열지 않고, 쓰기는 아래 두 RPC로만 한다.
+-- Realtime 구독 대상이 아니므로 publication 등록은 하지 않는다.
+-- ============================================================
+CREATE TABLE push_subscriptions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES badminton_sessions(id) ON DELETE CASCADE,
+  session_participant_id UUID REFERENCES session_participants(id) ON DELETE CASCADE,
+  guest_participant_id UUID REFERENCES guest_participants(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CHECK (num_nonnulls(session_participant_id, guest_participant_id) = 1),
+  UNIQUE (session_id, endpoint)
+);
+
+CREATE INDEX idx_push_subscriptions_session_id ON push_subscriptions(session_id);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- 발송 API가 운영진 쿠키 세션으로 조회하고, 만료(404/410)된 구독을 지운다.
+CREATE POLICY "Session organizers can read push subscriptions" ON push_subscriptions
+  FOR SELECT USING (is_session_organizer(session_id));
+CREATE POLICY "Session organizers can delete push subscriptions" ON push_subscriptions
+  FOR DELETE USING (is_session_organizer(session_id));
+
+-- 등록/덮어쓰기. 같은 기기(endpoint)가 같은 모임에서 다른 이름을 고르면 기존 행을 덮어쓴다.
+-- 로그인 참가자 행은 본인만 등록할 수 있다. 게스트는 본인 확인 수단이 없어 소속 모임만 검증한다.
+CREATE OR REPLACE FUNCTION upsert_push_subscription(
+  p_session_id UUID,
+  p_session_participant_id UUID,
+  p_guest_participant_id UUID,
+  p_endpoint TEXT,
+  p_p256dh TEXT,
+  p_auth TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF num_nonnulls(p_session_participant_id, p_guest_participant_id) <> 1 THEN
+    RAISE EXCEPTION 'exactly one participant id is required';
+  END IF;
+
+  IF p_endpoint IS NULL OR p_p256dh IS NULL OR p_auth IS NULL THEN
+    RAISE EXCEPTION 'subscription endpoint and keys are required';
+  END IF;
+
+  IF p_session_participant_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM session_participants sp
+      WHERE sp.id = p_session_participant_id
+        AND sp.session_id = p_session_id
+        AND sp.user_id::text = auth.uid()::text
+    ) THEN
+      RAISE EXCEPTION 'participant does not belong to the current user in this session';
+    END IF;
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1 FROM guest_participants gp
+      WHERE gp.id = p_guest_participant_id
+        AND gp.session_id = p_session_id
+    ) THEN
+      RAISE EXCEPTION 'guest participant does not belong to this session';
+    END IF;
+  END IF;
+
+  INSERT INTO push_subscriptions (session_id, session_participant_id, guest_participant_id, endpoint, p256dh, auth)
+  VALUES (p_session_id, p_session_participant_id, p_guest_participant_id, p_endpoint, p_p256dh, p_auth)
+  ON CONFLICT (session_id, endpoint) DO UPDATE SET
+    session_participant_id = EXCLUDED.session_participant_id,
+    guest_participant_id = EXCLUDED.guest_participant_id,
+    p256dh = EXCLUDED.p256dh,
+    auth = EXCLUDED.auth,
+    created_at = NOW();
+END;
+$$;
+
+-- 끄기. endpoint는 추측할 수 없는 URL이므로 "그 기기만 자기 구독을 지울 수 있다"와 같다.
+CREATE OR REPLACE FUNCTION delete_push_subscription(p_session_id UUID, p_endpoint TEXT)
+RETURNS VOID
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  DELETE FROM push_subscriptions WHERE session_id = p_session_id AND endpoint = p_endpoint;
+$$;
+
+REVOKE ALL ON FUNCTION upsert_push_subscription(UUID, UUID, UUID, TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION upsert_push_subscription(UUID, UUID, UUID, TEXT, TEXT, TEXT) TO anon, authenticated;
+REVOKE ALL ON FUNCTION delete_push_subscription(UUID, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_push_subscription(UUID, TEXT) TO anon, authenticated;

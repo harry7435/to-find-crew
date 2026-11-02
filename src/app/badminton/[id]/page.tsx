@@ -289,6 +289,9 @@ export default function SessionDetailPage() {
     session.status !== 'completed' &&
     (session.session_participants ?? []).some((p) => p.user_id === user.id);
   const showOrganizerBoard = isOrganizer && !isViewOnly;
+  // 알림 받기에서 로그인 참가자 본인 이름을 고정하는 데 쓴다. 이 시점에는 위의 authLoading 가드를 지났으므로
+  // user 가 확정돼 있다 (CLAUDE.md의 useAuth() loading race).
+  const myParticipantId = (user && session.session_participants?.find((p) => p.user_id === user.id)?.id) ?? null;
 
   return (
     <>
@@ -379,7 +382,7 @@ export default function SessionDetailPage() {
               onMoreSheetOpenChange={setIsMoreSheetOpen}
             />
           ) : (
-            <SpectatorBoard sessionId={session.id} />
+            <SpectatorBoard sessionId={session.id} myParticipantId={myParticipantId} />
           )}
         </div>
 

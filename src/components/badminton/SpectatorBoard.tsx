@@ -11,9 +11,12 @@ import { useTicker } from '@/hooks/useTicker';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { Player } from '@/hooks/useGameManager';
 import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
+import PushOptIn from '@/components/badminton/PushOptIn';
 
 interface SpectatorBoardProps {
   sessionId: string;
+  /** 로그인 사용자가 이 모임의 참가자일 때 그 session_participants.id. 알림 받기에서 본인 이름을 고정하는 데 쓴다. */
+  myParticipantId?: string | null;
 }
 
 const UNKNOWN_PLAYER: Player = { id: 'unknown', name: '알 수 없음', status: 'active' };
@@ -78,7 +81,7 @@ function getStatusBadge(player: Player) {
   }
 }
 
-export default function SpectatorBoard({ sessionId }: SpectatorBoardProps) {
+export default function SpectatorBoard({ sessionId, myParticipantId = null }: SpectatorBoardProps) {
   const { players, courts, queue, games, isLoading } = useBoardSpectator(sessionId);
   const now = useTicker();
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
@@ -108,8 +111,9 @@ export default function SpectatorBoard({ sessionId }: SpectatorBoardProps) {
 
   return (
     <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
-      <div className="shrink-0 flex justify-end">
-        <Button size="sm" variant="ghost" onClick={() => setIsMoreSheetOpen(true)}>
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
+        <PushOptIn sessionId={sessionId} players={players} myParticipantId={myParticipantId} />
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setIsMoreSheetOpen(true)}>
           <Users className="h-4 w-4 mr-1" />
           전체 명단 · 게임 기록
         </Button>
