@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 10월 8일">
+    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 11월 2일">
       <p>
         To Find Crew(이하 &ldquo;서비스&rdquo;)는 「개인정보 보호법」에 따라 이용자의 개인정보를 보호하고 이와 관련한
         고충을 신속하게 처리할 수 있도록 다음과 같이 개인정보처리방침을 수립·공개합니다.
@@ -49,6 +49,11 @@ export default function PrivacyPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>서비스 이용 통계(방문 페이지, 접속 국가·기기 유형 등) — 개인을 식별하지 않는 익명 집계 형태</li>
         </ul>
+
+        <p className="mt-4 font-medium text-gray-900">마. 내 차례 알림을 켠 경우</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>기기의 푸시 알림 수신 주소와 암호화 키, 알림을 받을 참가자(이용자가 직접 선택한 이름)</li>
+        </ul>
       </LegalSection>
 
       <LegalSection heading="2. 개인정보의 수집 및 이용 목적">
@@ -56,6 +61,7 @@ export default function PrivacyPage() {
           <li>회원 식별 및 로그인 인증, 계정 관리</li>
           <li>모임 생성·참가 관리 및 참가자 명단 구성</li>
           <li>팀 편성, 코트 배정, 대기 순서 관리 등 경기 운영 기능 제공</li>
+          <li>내 게임이 코트에 배정될 때 해당 참가자의 기기로 차례 알림 발송</li>
           <li>같은 모임에 참가한 이용자 간 참가자 정보 표시</li>
           <li>서비스 개선을 위한 이용 통계 분석</li>
         </ul>
@@ -71,6 +77,10 @@ export default function PrivacyPage() {
           <li>
             로그인 없이 이용하는 &ldquo;게임 관리&rdquo; 기능에 입력한 정보: 서버에 전송되지 않고 이용자의 브라우저에만
             저장되므로, 브라우저 저장 데이터를 삭제하면 즉시 소멸합니다.
+          </li>
+          <li>
+            알림 수신 정보: 이용자가 알림을 끄거나, 해당 모임 또는 참가자가 삭제되거나, 브라우저가 알림 구독을 만료시킨
+            것이 확인되면 지체 없이 삭제합니다.
           </li>
         </ul>
       </LegalSection>
@@ -110,9 +120,13 @@ export default function PrivacyPage() {
                 <td className="px-3 py-2">Google LLC</td>
                 <td className="px-3 py-2">구글 계정 로그인 인증</td>
               </tr>
-              <tr>
+              <tr className="border-b">
                 <td className="px-3 py-2">주식회사 카카오</td>
                 <td className="px-3 py-2">카카오 계정 로그인 인증</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">이용자 브라우저의 푸시 서비스 제공사(Google, Apple, Mozilla 등)</td>
+                <td className="px-3 py-2">내 차례 알림 메시지 전달</td>
               </tr>
             </tbody>
           </table>
@@ -136,6 +150,9 @@ export default function PrivacyPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>로그인 없이 이용하는 &ldquo;게임 관리&rdquo; 기능의 참가자 명단, 코트 상태, 경기 기록 임시 저장</li>
           <li>로그인하지 않은 이용자가 참가한 모임을 다시 찾아갈 수 있도록 하는 즐겨찾기 목록</li>
+          <li>
+            내 차례 알림을 켠 모임과 선택한 참가자 이름 표시(알림 수신 정보 자체는 1항 마목에 따라 서버에 저장됩니다)
+          </li>
           <li>로그인 세션 유지</li>
         </ul>
         <p className="mt-2">

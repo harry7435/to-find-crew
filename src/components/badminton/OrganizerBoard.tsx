@@ -20,6 +20,7 @@ import GameHistory from '@/components/game-manager/GameHistory';
 import CourtManager from '@/components/game-manager/CourtManager';
 import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
+import { notifyGameStarted } from '@/lib/push';
 
 interface OrganizerBoardProps {
   sessionId: string;
@@ -160,6 +161,8 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
       const court = courts.find((c) => c.id === courtId);
       if (await assignQueueToCourt(queueItemId, courtId)) {
         toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`);
+        // 대기열 항목 id가 곧 board_games.id 다. 기다리지 않는다 — 알림 실패가 보드 조작을 막으면 안 된다.
+        notifyGameStarted(queueItemId);
       }
     },
     [assignQueueToCourt, courts],
