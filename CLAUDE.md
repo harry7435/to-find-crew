@@ -176,6 +176,13 @@
   `docs/gotchas/invite-duplicate-participant-prevention.md` before adding any linking/matching
   logic between `guest_participants` and `users`.
 
+## Error Monitoring (Sentry)
+
+- Supabase and API-route failures don't throw, so they reach Sentry only via explicit
+  `reportError()` calls; `useBoardRealtime`'s `fail(message, cause?)` must omit `cause` for normal
+  concurrency conflicts. See `docs/gotchas/error-monitoring.md` before adding a write path or a 500
+  branch.
+
 ## Testing / Verification
 
 - No automated test suite (no Jest/Vitest) exists. Don't add one unprompted. Verify changes manually

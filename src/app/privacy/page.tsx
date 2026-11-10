@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 11월 2일">
+    <LegalLayout title="개인정보처리방침" effectiveDate="2026년 11월 10일">
       <p>
         To Find Crew(이하 &ldquo;서비스&rdquo;)는 「개인정보 보호법」에 따라 이용자의 개인정보를 보호하고 이와 관련한
         고충을 신속하게 처리할 수 있도록 다음과 같이 개인정보처리방침을 수립·공개합니다.
@@ -48,6 +48,10 @@ export default function PrivacyPage() {
         <p className="mt-4 font-medium text-gray-900">라. 자동으로 수집되는 정보</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>서비스 이용 통계(방문 페이지, 접속 국가·기기 유형 등) — 개인을 식별하지 않는 익명 집계 형태</li>
+          <li>
+            서비스 이용 중 자동으로 생성되는 오류 정보(오류 내용, 발생 시각·페이지 주소, 브라우저·기기 유형, 회원
+            식별번호(로그인한 경우), 모임·참가자 식별번호)
+          </li>
         </ul>
 
         <p className="mt-4 font-medium text-gray-900">마. 내 차례 알림을 켠 경우</p>
@@ -64,6 +68,7 @@ export default function PrivacyPage() {
           <li>내 게임이 코트에 배정될 때 해당 참가자의 기기로 차례 알림 발송</li>
           <li>같은 모임에 참가한 이용자 간 참가자 정보 표시</li>
           <li>서비스 개선을 위한 이용 통계 분석</li>
+          <li>서비스 오류 탐지 및 안정성 개선</li>
         </ul>
       </LegalSection>
 
@@ -82,6 +87,7 @@ export default function PrivacyPage() {
             알림 수신 정보: 이용자가 알림을 끄거나, 해당 모임 또는 참가자가 삭제되거나, 브라우저가 알림 구독을 만료시킨
             것이 확인되면 지체 없이 삭제합니다.
           </li>
+          <li>오류 정보: 수집일로부터 최대 90일 이내에 자동으로 삭제됩니다.</li>
         </ul>
       </LegalSection>
 
@@ -115,6 +121,10 @@ export default function PrivacyPage() {
               <tr className="border-b">
                 <td className="px-3 py-2">Vercel Inc.</td>
                 <td className="px-3 py-2">서비스 호스팅, 익명 방문 통계 수집</td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-3 py-2">Functional Software, Inc. (Sentry)</td>
+                <td className="px-3 py-2">서비스 오류 기록 수집·분석</td>
               </tr>
               <tr className="border-b">
                 <td className="px-3 py-2">Google LLC</td>

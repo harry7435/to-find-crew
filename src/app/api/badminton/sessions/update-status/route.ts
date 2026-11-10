@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { isSessionOrganizer } from '@/lib/session-organizer';
+import { reportError } from '@/lib/monitoring';
 
 type SessionStatus = 'open' | 'in_progress' | 'completed';
 
@@ -78,6 +79,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Update status error:', error);
+    reportError('[api] POST /api/badminton/sessions/update-status: Failed to update status', error, {
+      route: '/api/badminton/sessions/update-status',
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update status' },
       { status: 500 },

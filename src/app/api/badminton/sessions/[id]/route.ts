@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { isSessionOrganizer } from '@/lib/session-organizer';
 import { NextRequest, NextResponse } from 'next/server';
+import { reportError } from '@/lib/monitoring';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -91,6 +92,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   } catch (error) {
     console.error('Session fetch error:', error);
+    reportError('[api] GET /api/badminton/sessions/[id]: Internal server error', error, {
+      route: '/api/badminton/sessions/[id]',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -151,6 +155,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (updateError) {
       console.error('Session update error:', updateError);
+      reportError('[api] PATCH /api/badminton/sessions/[id]: Failed to update session', updateError, {
+        route: '/api/badminton/sessions/[id]',
+        sessionId,
+      });
       return NextResponse.json({ error: 'Failed to update session' }, { status: 500 });
     }
 
@@ -160,6 +168,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     });
   } catch (error) {
     console.error('Session update error:', error);
+    reportError('[api] PATCH /api/badminton/sessions/[id]: Internal server error', error, {
+      route: '/api/badminton/sessions/[id]',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -205,12 +216,19 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (deleteError) {
       console.error('Session delete error:', deleteError);
+      reportError('[api] DELETE /api/badminton/sessions/[id]: Failed to delete session', deleteError, {
+        route: '/api/badminton/sessions/[id]',
+        sessionId,
+      });
       return NextResponse.json({ error: 'Failed to delete session' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Session delete error:', error);
+    reportError('[api] DELETE /api/badminton/sessions/[id]: Internal server error', error, {
+      route: '/api/badminton/sessions/[id]',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

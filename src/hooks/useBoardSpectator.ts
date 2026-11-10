@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { reportRealtimeStatus } from '@/lib/monitoring';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
 import {
@@ -119,7 +120,8 @@ export function useBoardSpectator(sessionId: string) {
         },
         () => loadSnapshot(),
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        reportRealtimeStatus('useBoardSpectator', status, err, { sessionId });
         if (status === 'SUBSCRIBED') {
           loadSnapshot();
         }

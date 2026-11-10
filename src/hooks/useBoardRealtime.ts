@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { reportError, reportRealtimeStatus } from '@/lib/monitoring';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
 import {
@@ -25,11 +26,15 @@ type PlayerStateUpdates = Partial<
   Pick<BoardPlayerStateRow, 'attending' | 'player_status' | 'pinned' | 'waiting_since'>
 >;
 
+// 실패는 여기서 보고한다. 이 결과로 실패하는 fail() 호출은 cause 없이 불러 중복 보고를 막는다.
 async function updatePlayerState(participantId: string, updates: PlayerStateUpdates): Promise<boolean> {
   const { error } = await supabase
     .from('board_player_state')
     .update(updates)
     .or(`session_participant_id.eq.${participantId},guest_participant_id.eq.${participantId}`);
+  if (error) {
+    reportError('선수 상태 저장에 실패했습니다', error, { participantId });
+  }
   return !error;
 }
 
@@ -183,7 +188,8 @@ export function useBoardRealtime(sessionId: string) {
         },
         () => loadSnapshot(),
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        reportRealtimeStatus('useBoardRealtime', status, err, { sessionId });
         // 최초 연결뿐 아니라 네트워크 재연결로 재구독될 때도 전체 스냅샷을 다시 받아
         // 끊긴 동안 놓쳤을 수 있는 변경사항과 정합성을 맞춘다
         if (status === 'SUBSCRIBED') {
@@ -208,13 +214,18 @@ export function useBoardRealtime(sessionId: string) {
   }, [sessionId, loadSnapshot]);
 
   // 실패를 알리고 화면을 서버 상태로 되돌린 뒤 false를 돌려준다.
+  // cause를 넘기면 Sentry에 보고한다. 정상 동시성 충돌(이미 처리됨 등)과 이미 다른 곳에서
+  // 보고된 실패에는 cause를 넘기지 않는다(docs/gotchas/error-monitoring.md).
   const fail = useCallback(
-    async (message: string): Promise<false> => {
+    async (message: string, cause?: unknown): Promise<false> => {
+      if (cause !== undefined) {
+        reportError(message, cause, { sessionId });
+      }
       notifyError(message);
       await loadSnapshot();
       return false;
     },
-    [loadSnapshot],
+    [sessionId, loadSnapshot],
   );
 
   const addPlayer = useCallback(
@@ -234,7 +245,7 @@ export function useBoardRealtime(sessionId: string) {
         .single();
 
       if (error || !guest) {
-        return fail('선수 등록에 실패했습니다');
+        return fail('선수 등록에 실패했습니다', error ?? new Error('no row returned'));
       }
 
       // 상태 행 생성이 실패해도 loadSnapshot의 누락 행 보충이 다시 만들어 주므로 결과를 확인하지 않는다.
@@ -264,7 +275,7 @@ export function useBoardRealtime(sessionId: string) {
       } else {
         const { error } = await supabase.from('guest_participants').delete().eq('id', id);
         if (error) {
-          return fail('선수 삭제에 실패했습니다');
+          return fail('선수 삭제에 실패했습니다', error);
         }
       }
       await loadSnapshot();
@@ -309,12 +320,12 @@ export function useBoardRealtime(sessionId: string) {
               { onConflict: 'session_participant_id' },
             );
           if (error) {
-            return fail('선수 정보 수정에 실패했습니다');
+            return fail('선수 정보 수정에 실패했습니다', error);
           }
         } else {
           const { error } = await supabase.from('guest_participants').update(profileUpdates).eq('id', id);
           if (error) {
-            return fail('선수 정보 수정에 실패했습니다');
+            return fail('선수 정보 수정에 실패했습니다', error);
           }
         }
       }
@@ -385,7 +396,7 @@ export function useBoardRealtime(sessionId: string) {
   const resetPlayers = useCallback(async (): Promise<boolean> => {
     const { error } = await supabase.from('guest_participants').delete().eq('session_id', sessionId);
     if (error) {
-      return fail('게스트 선수 초기화에 실패했습니다');
+      return fail('게스트 선수 초기화에 실패했습니다', error);
     }
     await loadSnapshot();
     return true;
@@ -410,7 +421,7 @@ export function useBoardRealtime(sessionId: string) {
         .from('courts')
         .insert([{ session_id: sessionId, name, sort_order: courts.length }]);
       if (error) {
-        return fail('코트 추가에 실패했습니다');
+        return fail('코트 추가에 실패했습니다', error);
       }
       await loadSnapshot();
       return true;
@@ -422,7 +433,7 @@ export function useBoardRealtime(sessionId: string) {
     async (id: string): Promise<boolean> => {
       const { error } = await supabase.from('courts').delete().eq('id', id);
       if (error) {
-        return fail('코트 삭제에 실패했습니다');
+        return fail('코트 삭제에 실패했습니다', error);
       }
       await loadSnapshot();
       return true;
@@ -434,7 +445,7 @@ export function useBoardRealtime(sessionId: string) {
     async (id: string, name: string): Promise<boolean> => {
       const { error } = await supabase.from('courts').update({ name }).eq('id', id);
       if (error) {
-        return fail('코트 이름 변경에 실패했습니다');
+        return fail('코트 이름 변경에 실패했습니다', error);
       }
       await loadSnapshot();
       return true;
@@ -451,7 +462,7 @@ export function useBoardRealtime(sessionId: string) {
         .select('id')
         .single();
       if (error || !game) {
-        return fail('대기열 추가에 실패했습니다');
+        return fail('대기열 추가에 실패했습니다', error ?? new Error('no row returned'));
       }
       if (!(await updatePlayerStates(playerIds, { player_status: 'queued', pinned: false }))) {
         // 게임 행만 남기고 실패로 알리면 다시 확정했을 때 같은 4명이 대기열에 두 번 들어간다.
@@ -474,7 +485,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('id', queueItemId)
         .maybeSingle();
       if (findError) {
-        return fail('대기열 취소에 실패했습니다');
+        return fail('대기열 취소에 실패했습니다', findError);
       }
       if (!item) {
         return fail('이미 처리된 대기열입니다');
@@ -487,7 +498,7 @@ export function useBoardRealtime(sessionId: string) {
       }
       const { error } = await supabase.from('board_games').delete().eq('id', queueItemId);
       if (error) {
-        return fail('대기열 취소에 실패했습니다. 다시 시도해주세요');
+        return fail('대기열 취소에 실패했습니다. 다시 시도해주세요', error);
       }
       await loadSnapshot();
       return true;
@@ -504,7 +515,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('id', queueItemId)
         .maybeSingle();
       if (findError) {
-        return fail('코트 배정에 실패했습니다');
+        return fail('코트 배정에 실패했습니다', findError);
       }
       if (!item) {
         return fail('이미 처리된 대기열입니다');
@@ -514,7 +525,7 @@ export function useBoardRealtime(sessionId: string) {
         .update({ court_id: courtId, status: 'playing', started_at: nowIso })
         .eq('id', queueItemId);
       if (error) {
-        return fail('코트 배정에 실패했습니다');
+        return fail('코트 배정에 실패했습니다', error);
       }
       // 여기서 실패하면 게임은 코트에 올라갔는데 선수는 queued로 남는다. 그 코트의 게임을
       // 종료/취소하면 선수 상태가 다시 맞춰지므로 복구할 수 있다.
@@ -536,7 +547,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('status', 'playing')
         .maybeSingle();
       if (findError) {
-        return fail('게임 종료에 실패했습니다');
+        return fail('게임 종료에 실패했습니다', findError);
       }
       if (!game) {
         return fail('이미 종료된 게임입니다');
@@ -554,7 +565,7 @@ export function useBoardRealtime(sessionId: string) {
         .update({ status: 'completed', completed_at: nowIso })
         .eq('id', game.id);
       if (error) {
-        return fail('게임 종료에 실패했습니다. 다시 시도해주세요');
+        return fail('게임 종료에 실패했습니다. 다시 시도해주세요', error);
       }
       await loadSnapshot();
       return true;
@@ -571,7 +582,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('status', 'playing')
         .maybeSingle();
       if (findError) {
-        return fail('게임 취소에 실패했습니다');
+        return fail('게임 취소에 실패했습니다', findError);
       }
       if (!game) {
         return fail('이미 종료된 게임입니다');
@@ -585,7 +596,7 @@ export function useBoardRealtime(sessionId: string) {
       }
       const { error } = await supabase.from('board_games').delete().eq('id', game.id);
       if (error) {
-        return fail('게임 취소에 실패했습니다. 다시 시도해주세요');
+        return fail('게임 취소에 실패했습니다. 다시 시도해주세요', error);
       }
       await loadSnapshot();
       return true;
@@ -602,7 +613,7 @@ export function useBoardRealtime(sessionId: string) {
         .in('court_id', [fromCourtId, toCourtId])
         .eq('status', 'playing');
       if (findError) {
-        return fail('코트 이동에 실패했습니다');
+        return fail('코트 이동에 실패했습니다', findError);
       }
       const fromGame = rows?.find((g) => g.court_id === fromCourtId);
       if (!fromGame) {
@@ -612,7 +623,7 @@ export function useBoardRealtime(sessionId: string) {
 
       const { error } = await supabase.from('board_games').update({ court_id: toCourtId }).eq('id', fromGame.id);
       if (error) {
-        return fail('코트 이동에 실패했습니다');
+        return fail('코트 이동에 실패했습니다', error);
       }
       if (toGame) {
         const { error: swapError } = await supabase
@@ -623,7 +634,7 @@ export function useBoardRealtime(sessionId: string) {
           // 맞바꾸기의 두 번째 업데이트가 실패하면 첫 업데이트를 되돌린다.
           // 그대로 두면 두 게임이 같은 코트를 가리켜 한 게임이 화면에서 사라진다.
           await supabase.from('board_games').update({ court_id: fromCourtId }).eq('id', fromGame.id);
-          return fail('코트 교환에 실패했습니다');
+          return fail('코트 교환에 실패했습니다', swapError);
         }
       }
       // 선수 상태(playing)와 started_at은 그대로 두어 경과 시간이 이어지게 한다
@@ -637,7 +648,7 @@ export function useBoardRealtime(sessionId: string) {
     async (id: string): Promise<boolean> => {
       const { error } = await supabase.from('board_games').delete().eq('id', id).eq('status', 'completed');
       if (error) {
-        return fail('게임 기록 삭제에 실패했습니다');
+        return fail('게임 기록 삭제에 실패했습니다', error);
       }
       await loadSnapshot();
       return true;
@@ -648,7 +659,7 @@ export function useBoardRealtime(sessionId: string) {
   const resetGames = useCallback(async (): Promise<boolean> => {
     const { error } = await supabase.from('board_games').delete().eq('session_id', sessionId).eq('status', 'completed');
     if (error) {
-      return fail('게임 기록 초기화에 실패했습니다');
+      return fail('게임 기록 초기화에 실패했습니다', error);
     }
     await loadSnapshot();
     return true;

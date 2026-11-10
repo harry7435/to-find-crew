@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/nextjs';
 import { supabase } from '@/lib/supabase';
 
 // users 테이블에 저장된 표시 정보. 소셜 계정 메타데이터(user.user_metadata)는 로그인 시점 값이라
@@ -94,6 +95,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshProfile();
   }, [refreshProfile]);
+
+  // 에러 리포트에는 회원 식별번호만 붙인다(이름·이메일 전송 금지, 개인정보처리방침 §1).
+  useEffect(() => {
+    Sentry.setUser(userId ? { id: userId } : null);
+  }, [userId]);
 
   useEffect(() => {
     // 초기 세션 확인

@@ -2,6 +2,10 @@
   "name": "to-find-crew",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "26.x"
+  },
+  "packageManager": "pnpm@9.15.3",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -21,6 +25,7 @@
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@sentry/nextjs": "^11.11.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.55.0",
     "@vercel/analytics": "^2.0.1",
@@ -44,7 +49,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
