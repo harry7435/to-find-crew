@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
+import { reportError } from '@/lib/monitoring';
 
 export async function GET() {
   try {
@@ -81,6 +82,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error('My sessions fetch error:', error);
+    reportError('[api] GET /api/badminton/sessions/my-sessions: Failed to fetch sessions', error, {
+      route: '/api/badminton/sessions/my-sessions',
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch sessions' },
       { status: 500 },

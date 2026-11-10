@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { reportError } from '@/lib/monitoring';
 
 interface GuestJoinSessionRequest {
   access_code: string;
@@ -64,6 +65,9 @@ export async function POST(request: NextRequest) {
 
     if (joinError) {
       console.error('Guest join error:', joinError);
+      reportError('[api] POST /api/badminton/sessions/join-guest: Failed to join session', joinError, {
+        route: '/api/badminton/sessions/join-guest',
+      });
       return NextResponse.json({ error: 'Failed to join session' }, { status: 500 });
     }
 
@@ -79,6 +83,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Guest join session error:', error);
+    reportError('[api] POST /api/badminton/sessions/join-guest: Internal server error', error, {
+      route: '/api/badminton/sessions/join-guest',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import webpush from 'web-push';
 import { createServerClient } from '@/lib/supabase-server';
 import { isSessionOrganizer } from '@/lib/session-organizer';
+import { reportError } from '@/lib/monitoring';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerClient>>;
 
@@ -105,6 +106,9 @@ async function sendToSubscriptions(
 
 export async function POST(request: NextRequest) {
   if (!configureVapid()) {
+    reportError('[api] POST /api/push/game-started: Push is not configured', new Error('Push is not configured'), {
+      route: '/api/push/game-started',
+    });
     return NextResponse.json({ error: 'Push is not configured' }, { status: 500 });
   }
 
@@ -132,6 +136,9 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (gameError) {
       console.error('[push] board_games lookup failed:', gameError);
+      reportError('[api] POST /api/push/game-started: Failed to load game', gameError, {
+        route: '/api/push/game-started',
+      });
       return NextResponse.json({ error: 'Failed to load game' }, { status: 500 });
     }
     if (!game) {
@@ -165,6 +172,10 @@ export async function POST(request: NextRequest) {
       .or(`session_participant_id.in.(${playerIds}),guest_participant_id.in.(${playerIds})`);
     if (subsError) {
       console.error('[push] push_subscriptions lookup failed:', subsError);
+      reportError('[api] POST /api/push/game-started: Failed to load subscriptions', subsError, {
+        route: '/api/push/game-started',
+        sessionId: game.session_id,
+      });
       return NextResponse.json({ error: 'Failed to load subscriptions' }, { status: 500 });
     }
     if (!subscriptions || subscriptions.length === 0) {
@@ -183,6 +194,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('[push] game-started error:', error);
+    reportError('[api] POST /api/push/game-started: Internal server error', error, { route: '/api/push/game-started' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { reportError } from '@/lib/monitoring';
 
 const SESSION_STATUS = {
   COMPLETED: 'completed',
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       console.error('Leave guest session error:', deleteError);
+      reportError('[api] POST /api/badminton/sessions/leave-guest: Failed to leave session', deleteError, {
+        route: '/api/badminton/sessions/leave-guest',
+        sessionId: body.session_id,
+      });
       return NextResponse.json({ error: 'Failed to leave session' }, { status: 500 });
     }
 
@@ -68,6 +73,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Leave guest session error:', error);
+    reportError('[api] POST /api/badminton/sessions/leave-guest: Internal server error', error, {
+      route: '/api/badminton/sessions/leave-guest',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

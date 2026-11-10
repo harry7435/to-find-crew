@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { isSessionOrganizer } from '@/lib/session-organizer';
+import { reportError } from '@/lib/monitoring';
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,6 +82,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Remove participant error:', error);
+    reportError('[api] POST /api/badminton/sessions/remove-participant: Failed to remove participant', error, {
+      route: '/api/badminton/sessions/remove-participant',
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to remove participant' },
       { status: 500 },

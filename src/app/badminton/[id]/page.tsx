@@ -15,6 +15,7 @@ import { ArrowLeft, Calendar, Eye, History, LogOut, MapPin, Copy, Share2, QrCode
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { reportRealtimeStatus } from '@/lib/monitoring';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function SessionDetailPage() {
@@ -94,7 +95,9 @@ export default function SessionDetailPage() {
         { event: '*', schema: 'public', table: 'session_organizers', filter: `session_id=eq.${sessionId}` },
         () => fetchSession(),
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        reportRealtimeStatus('badminton-session-page', status, err, { sessionId });
+      });
 
     // 모바일(특히 PWA)은 백그라운드로 가면 소켓이 멈추거나 끊기고, 그동안의 이벤트는 다시 오지 않는다.
     // 재구독이 감지되지 않는 경우에도 최신 상태가 보이도록 화면 복귀·네트워크 복구 시 직접 다시 받는다.

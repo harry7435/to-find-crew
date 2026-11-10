@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { reportError } from '@/lib/monitoring';
 
 interface CreateSessionRequest {
   name: string;
@@ -59,6 +60,11 @@ export async function POST(request: NextRequest) {
     } while (!isUnique && attempts < 10);
 
     if (!isUnique) {
+      reportError(
+        '[api] POST /api/badminton/sessions: Unable to generate unique access code',
+        new Error('Unable to generate unique access code'),
+        { route: '/api/badminton/sessions' },
+      );
       return NextResponse.json({ error: 'Unable to generate unique access code' }, { status: 500 });
     }
 
@@ -82,6 +88,9 @@ export async function POST(request: NextRequest) {
 
     if (sessionError) {
       console.error('Session creation error:', sessionError);
+      reportError('[api] POST /api/badminton/sessions: Failed to create session', sessionError, {
+        route: '/api/badminton/sessions',
+      });
       return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
     }
 
@@ -107,6 +116,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Session creation error:', error);
+    reportError('[api] POST /api/badminton/sessions: Internal server error', error, {
+      route: '/api/badminton/sessions',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -140,12 +152,18 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Sessions fetch error:', error);
+      reportError('[api] GET /api/badminton/sessions: Failed to fetch sessions', error, {
+        route: '/api/badminton/sessions',
+      });
       return NextResponse.json({ error: 'Failed to fetch sessions' }, { status: 500 });
     }
 
     return NextResponse.json({ sessions });
   } catch (error) {
     console.error('Sessions fetch error:', error);
+    reportError('[api] GET /api/badminton/sessions: Internal server error', error, {
+      route: '/api/badminton/sessions',
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
