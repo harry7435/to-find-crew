@@ -20,6 +20,7 @@ import GameHistory from '@/components/game-manager/GameHistory';
 import CourtManager from '@/components/game-manager/CourtManager';
 import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { notifyGameStarted } from '@/lib/push';
 
 interface OrganizerBoardProps {
@@ -31,6 +32,7 @@ interface OrganizerBoardProps {
 }
 
 export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheetOpenChange }: OrganizerBoardProps) {
+  const confirm = useConfirm();
   const {
     players,
     games,
@@ -110,7 +112,14 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   const handleRemovePlayer = useCallback(
     async (id: string) => {
       const player = players.find((p) => p.id === id);
-      if (player && confirm(`${player.name} 선수를 삭제하시겠습니까?`)) {
+      if (
+        player &&
+        (await confirm({
+          title: `${player.name} 선수를 삭제하시겠습니까?`,
+          confirmText: '삭제',
+          variant: 'destructive',
+        }))
+      ) {
         if (!(await removePlayer(id))) return;
         removeReady(id);
         toast.success('선수가 삭제되었습니다');
@@ -119,7 +128,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         }
       }
     },
-    [players, removePlayer, removeReady, pickedPlayers],
+    [players, removePlayer, removeReady, pickedPlayers, confirm],
   );
 
   const handleRandomPickTeams = useCallback(() => {
@@ -170,13 +179,19 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
 
   const handleRemoveFromQueue = useCallback(
     async (queueItemId: string) => {
-      if (confirm('대기열에서 이 게임을 취소하시겠습니까?')) {
+      if (
+        await confirm({
+          title: '대기열에서 이 게임을 취소하시겠습니까?',
+          confirmText: '대기 취소',
+          cancelText: '닫기',
+        })
+      ) {
         if (await removeFromQueue(queueItemId)) {
           toast.success('대기열에서 취소되었습니다');
         }
       }
     },
-    [removeFromQueue],
+    [removeFromQueue, confirm],
   );
 
   const handleRemoveCourt = useCallback(
@@ -195,26 +210,39 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     async (id: string) => {
       const court = courts.find((c) => c.id === id);
       if (!court?.playerIds) return;
-      if (confirm(`${court.name} 게임을 종료하시겠습니까?`)) {
+      if (
+        await confirm({
+          title: `${court.name} 게임을 종료하시겠습니까?`,
+          confirmText: '종료',
+          variant: 'destructive',
+        })
+      ) {
         if (await endCourtGame(id)) {
           toast.success(`${court.name} 게임이 종료되었습니다. 선수들이 복귀했습니다`);
         }
       }
     },
-    [courts, endCourtGame],
+    [courts, endCourtGame, confirm],
   );
 
   const handleCancelCourtGame = useCallback(
     async (id: string) => {
       const court = courts.find((c) => c.id === id);
       if (!court?.playerIds) return;
-      if (confirm(`${court.name} 게임을 취소하시겠습니까?\n(게임 기록이 남지 않습니다)`)) {
+      if (
+        await confirm({
+          title: `${court.name} 게임을 취소하시겠습니까?`,
+          description: '게임 기록이 남지 않습니다',
+          confirmText: '게임 취소',
+          cancelText: '닫기',
+        })
+      ) {
         if (await cancelCourtGame(id)) {
           toast.success(`${court.name} 게임이 취소되었습니다`);
         }
       }
     },
-    [courts, cancelCourtGame],
+    [courts, cancelCourtGame, confirm],
   );
 
   const handleMoveCourtGame = useCallback(
@@ -331,13 +359,19 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
 
   const handleRemoveGame = useCallback(
     async (id: string) => {
-      if (confirm('이 게임 기록을 삭제하시겠습니까?')) {
+      if (
+        await confirm({
+          title: '이 게임 기록을 삭제하시겠습니까?',
+          confirmText: '삭제',
+          variant: 'destructive',
+        })
+      ) {
         if (await removeGame(id)) {
           toast.success('게임 기록이 삭제되었습니다');
         }
       }
     },
-    [removeGame],
+    [removeGame, confirm],
   );
 
   const handleResetGames = useCallback(async () => {
@@ -345,51 +379,75 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
       toast.error('삭제할 게임 기록이 없습니다');
       return;
     }
-    if (confirm('모든 게임 기록을 삭제하시겠습니까?\n(대기 중인 선수의 대기 시간도 함께 초기화됩니다)')) {
+    if (
+      await confirm({
+        title: '모든 게임 기록을 삭제하시겠습니까?',
+        description: '대기 중인 선수의 대기 시간도 함께 초기화됩니다',
+        confirmText: '삭제',
+        variant: 'destructive',
+      })
+    ) {
       const [gamesReset, waitingReset] = await Promise.all([resetGames(), resetWaitingTimes()]);
       if (gamesReset && waitingReset) {
         toast.success('게임 기록과 대기 시간이 초기화되었습니다');
       }
     }
-  }, [games.length, resetGames, resetWaitingTimes]);
+  }, [games.length, resetGames, resetWaitingTimes, confirm]);
 
   const handleResetPlayers = useCallback(async () => {
     if (players.length === 0) {
       toast.error('삭제할 선수가 없습니다');
       return;
     }
-    if (confirm('게스트로 등록된 선수 전원을 삭제하시겠습니까?\n(로그인 참가자는 유지됩니다)')) {
+    if (
+      await confirm({
+        title: '게스트로 등록된 선수 전원을 삭제하시겠습니까?',
+        description: '로그인 참가자는 유지됩니다',
+        confirmText: '삭제',
+        variant: 'destructive',
+      })
+    ) {
       setPickedPlayers(null);
       if (await resetPlayers()) {
         toast.success('게스트 선수 목록이 초기화되었습니다');
       }
     }
-  }, [players.length, resetPlayers]);
+  }, [players.length, resetPlayers, confirm]);
 
   const handleResetAttendance = useCallback(async () => {
     if (!players.some((p) => p.attending)) {
       toast.error('참석 처리된 선수가 없습니다');
       return;
     }
-    if (confirm('모든 선수의 오늘 참석을 해제하시겠습니까?')) {
+    if (
+      await confirm({
+        title: '모든 선수의 오늘 참석을 해제하시겠습니까?',
+        confirmText: '해제',
+      })
+    ) {
       setPickedPlayers(null);
       if (await setAttendingBulk([])) {
         toast.success('참석이 모두 해제되었습니다');
       }
     }
-  }, [players, setAttendingBulk]);
+  }, [players, setAttendingBulk, confirm]);
 
   const handleResetWaitingTimes = useCallback(async () => {
     if (!players.some((p) => p.status === 'active')) {
       toast.error('대기 중인 선수가 없습니다');
       return;
     }
-    if (confirm('대기 중인 선수 전원의 대기 시간을 초기화하시겠습니까?')) {
+    if (
+      await confirm({
+        title: '대기 중인 선수 전원의 대기 시간을 초기화하시겠습니까?',
+        confirmText: '초기화',
+      })
+    ) {
       if (await resetWaitingTimes()) {
         toast.success('대기 시간이 초기화되었습니다');
       }
     }
-  }, [players, resetWaitingTimes]);
+  }, [players, resetWaitingTimes, confirm]);
 
   if (isLoading) {
     return (

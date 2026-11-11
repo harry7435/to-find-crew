@@ -11,6 +11,7 @@ import SpectatorBoard from '@/components/badminton/SpectatorBoard';
 import UserInfoModal from '@/components/badminton/UserInfoModal';
 import { BadmintonSession } from '@/types/badminton';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ArrowLeft, Calendar, Eye, History, LogOut, MapPin, Copy, Share2, QrCode, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ export default function SessionDetailPage() {
   const sessionId = params.id as string;
   const { user, loading: authLoading, emailOnboarding } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
 
   const [session, setSession] = useState<BadmintonSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -162,7 +164,14 @@ export default function SessionDetailPage() {
   };
 
   const handleLeaveSession = async () => {
-    if (!confirm('이 모임 참가를 취소하시겠습니까?')) return;
+    if (
+      !(await confirm({
+        title: '이 모임 참가를 취소하시겠습니까?',
+        confirmText: '참가 취소',
+        cancelText: '닫기',
+      }))
+    )
+      return;
 
     setIsLeaving(true);
     try {

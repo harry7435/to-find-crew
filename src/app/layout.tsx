@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Toaster } from '@/components/ui/sonner';
+import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import AppShell from '@/components/layout/AppShell';
 import { Analytics } from '@vercel/analytics/next';
 
@@ -44,7 +45,9 @@ export default function RootLayout({
     <html lang="ko">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <ConfirmProvider>
+            <AppShell>{children}</AppShell>
+          </ConfirmProvider>
           {/* 헤더가 fixed h-16(64px)이라 상단 오프셋으로 헤더와 겹치지 않게 띄운다.
               bottom-right는 태블릿 이상에서 보드 페이지의 대기자 풀(인원 풀) 카드를 가려서 top-center로 변경 — 관련 피드백 2026-08-24.
               기본 노출 시간(1초)·탭으로 닫기 동작은 components/ui/sonner.tsx의 래퍼에서 처리한다. */}

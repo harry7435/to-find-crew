@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AuthGuard from '@/components/auth/AuthGuard';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -39,6 +40,7 @@ const convertToDateTimeLocal = (isoDateString: string): string => {
 export default function EditSessionPage() {
   const params = useParams();
   const router = useRouter();
+  const confirm = useConfirm();
   const sessionId = params.id as string;
 
   const [isLoading, setIsLoading] = useState(true);
@@ -136,7 +138,15 @@ export default function EditSessionPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('정말 이 번개 모임을 삭제하시겠습니까?\n(삭제 후 되돌릴 수 없습니다)')) return;
+    if (
+      !(await confirm({
+        title: '정말 이 번개 모임을 삭제하시겠습니까?',
+        description: '삭제 후 되돌릴 수 없습니다',
+        confirmText: '삭제',
+        variant: 'destructive',
+      }))
+    )
+      return;
 
     setIsSaving(true);
     try {
