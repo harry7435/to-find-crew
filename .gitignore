@@ -54,3 +54,8 @@ next-env.d.ts
 
 # Claude Code / superpowers working docs (specs & plans) — local-only, not committed
 /docs/superpowers/
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, ChevronDown, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Plus, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGameManager, Player } from '@/hooks/useGameManager';
 import { useReadyFlags } from '@/hooks/useReadyFlags';
-import PlayerForm from '@/components/game-manager/PlayerForm';
+import PlayerAddModal from '@/components/game-manager/PlayerAddModal';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
 import AttendancePickerModal from '@/components/game-manager/AttendancePickerModal';
@@ -18,12 +18,20 @@ import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
 import GameHistory from '@/components/game-manager/GameHistory';
 import CourtManager from '@/components/game-manager/CourtManager';
 import GameQueue from '@/components/game-manager/GameQueue';
+import { useArrivalHighlight, samePlayerSet } from '@/hooks/useArrivalHighlight';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
 import MigrateBanner from '@/components/game-manager/MigrateBanner';
 import MigrateModal from '@/components/game-manager/MigrateModal';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
+import MobileTabBar, { MOBILE_TAB_BAR_PADDING } from '@/components/layout/MobileTabBar';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+
+type MobileSection = 'players' | 'pick' | 'queue' | 'courts';
+
+/** 모바일에서는 접힘과 무관하게 내용을 보이고(탭이 섹션 전환을 맡는다), 데스크톱은 기존 접기 동작을 쓴다. */
+const COLLAPSIBLE_MOBILE_OPEN = 'data-[state=closed]:hidden max-md:!block';
 
 export default function GameManagerPage() {
   const router = useRouter();
@@ -61,17 +69,38 @@ export default function GameManagerPage() {
   const [isEditingCustomPick, setIsEditingCustomPick] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
   const [isAddingCourt, setIsAddingCourt] = useState(false);
+  const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
   const [openSections, setOpenSections] = useState({
-    registration: false,
     playerList: true,
     teamPicker: true,
     queue: true,
     courtManager: true,
-    gameHistory: false,
-    resetActions: false,
   });
+  // 모바일 전용: 섹션을 세로로 다 펼치면 한 화면에 안 들어와서 하단 탭으로 하나씩 보여준다.
+  const [mobileTab, setMobileTab] = useState<MobileSection>('players');
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const [isMigrateModalOpen, setIsMigrateModalOpen] = useState(false);
+  const queueArrival = useArrivalHighlight();
+  const courtArrival = useArrivalHighlight();
+  const flashQueue = queueArrival.flash;
+  const flashCourt = courtArrival.flash;
+  // 방금 확정한 4명. enqueueGame과 같은 핸들러에서 세팅되므로 다음 렌더의 queue에 새 항목이 들어 있다.
+  const [pendingEnqueue, setPendingEnqueue] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!pendingEnqueue) return;
+    setPendingEnqueue(null);
+    const idx = queue.findIndex((q) => samePlayerSet(q.playerIds, pendingEnqueue));
+    if (idx === -1) {
+      toast.success('대기열에 추가했어요');
+      return;
+    }
+    setOpenSections((prev) => ({ ...prev, queue: true }));
+    setMobileTab('queue');
+    flashQueue(queue[idx].id, `방금 추가 · ${idx + 1}번째`);
+    toast.success(`대기열 ${idx + 1}번째로 추가했어요`);
+  }, [pendingEnqueue, queue, flashQueue]);
   const { emailOnboarding } = useAuth();
 
   // 로그인 콜백에서 돌아왔는데 플래그가 아직 남아있는 예외 상황 대비
@@ -116,7 +145,7 @@ export default function GameManagerPage() {
   const handleAddPlayer = useCallback(
     (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
       addPlayer(playerData);
-      toast.success(`${playerData.name} 선수가 등록되었습니다 (미참석 상태)`);
+      toast.success(`${playerData.name} 선수를 등록했어요`);
     },
     [addPlayer],
   );
@@ -168,10 +197,7 @@ export default function GameManagerPage() {
     const playerIds = pickedPlayers.map((p) => p.id) as [string, string, string, string];
     enqueueGame(playerIds);
 
-    const playerNames = pickedPlayers.map((p) => p.name).join(', ');
-    toast.success('대기열에 추가되었습니다', {
-      description: `선수: ${playerNames}`,
-    });
+    setPendingEnqueue(playerIds);
     setPickedPlayers(null);
     setIsCustomPicking(false);
   }, [pickedPlayers, enqueueGame]);
@@ -180,9 +206,12 @@ export default function GameManagerPage() {
     (queueItemId: string, courtId: string) => {
       assignQueueToCourt(queueItemId, courtId);
       const court = courts.find((c) => c.id === courtId);
-      toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`);
+      setOpenSections((prev) => ({ ...prev, courtManager: true }));
+      setMobileTab('courts');
+      flashCourt(courtId, '게임 시작');
+      toast.success(`${court?.name ?? '코트'}에서 게임을 시작했어요`);
     },
-    [assignQueueToCourt, courts],
+    [assignQueueToCourt, courts, flashCourt],
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -295,9 +324,7 @@ export default function GameManagerPage() {
     if (selectedPlayers.length !== 4) return;
     const playerIds = selectedPlayers.map((p) => p.id) as [string, string, string, string];
     enqueueGame(playerIds);
-    toast.success('대기열에 추가되었습니다', {
-      description: `선수: ${selectedPlayers.map((p) => p.name).join(', ')}`,
-    });
+    setPendingEnqueue(playerIds);
     setIsCustomPicking(false);
     setPickedPlayers(null);
     setSelectedPlayers([]);
@@ -522,46 +549,40 @@ export default function GameManagerPage() {
   const playingCount = players.filter((p) => p.status === 'playing').length;
   const queuedCount = players.filter((p) => p.status === 'queued').length;
 
+  const mobileTabs = [
+    { key: 'players', label: '인원', badge: attendingCount },
+    { key: 'pick', label: '팀뽑기' },
+    { key: 'queue', label: '대기', badge: queue.length },
+    { key: 'courts', label: '코트', badge: `${courts.filter((c) => c.playerIds !== null).length}/${courts.length}` },
+  ];
+  /** 모바일에서 현재 탭이 아닌 섹션은 숨긴다(언마운트하지 않음 — 직접 선택 중인 선수 등 상태 보존). */
+  const mobileOnly = (section: MobileSection) => (mobileTab === section ? '' : 'hidden md:block');
+
   return (
-    <div className="container mx-auto px-3 py-4 max-w-4xl">
+    <div className={`container mx-auto px-3 py-4 max-w-4xl ${MOBILE_TAB_BAR_PADDING}`}>
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
         </Button>
         <h1 className="text-xl md:text-2xl font-bold">번개 게임 관리</h1>
-        <div className="w-11" />
+        <Button variant="ghost" size="sm" onClick={() => setIsMoreSheetOpen(true)} className="text-xs">
+          게임 기록 · 초기화
+        </Button>
       </div>
 
       <MigrateBanner hasPlayers={players.length > 0} onOpenModal={() => setIsMigrateModalOpen(true)} />
 
-      {/* Section 1: Player Registration */}
-      <Collapsible open={openSections.registration} onOpenChange={() => toggleSection('registration')}>
+      {/* Section 1: Player List */}
+      <Collapsible
+        open={openSections.playerList}
+        onOpenChange={() => toggleSection('playerList')}
+        className={mobileOnly('players')}
+      >
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">선수 등록</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.registration ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <PlayerForm onAddPlayer={handleAddPlayer} />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* Section 2: Player List */}
-      <Collapsible open={openSections.playerList} onOpenChange={() => toggleSection('playerList')}>
-        <Card className="mb-3">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">
                   인원 풀 (참석 {attendingCount}/{players.length}명)
                   {(activeCount > 0 || playingCount > 0 || queuedCount > 0) && (
@@ -572,14 +593,38 @@ export default function GameManagerPage() {
                     </span>
                   )}
                 </CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.playerList ? 'rotate-180' : ''}`}
-                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="hidden md:inline-flex"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!openSections.playerList) toggleSection('playerList');
+                      setIsAddPlayerModalOpen(true);
+                    }}
+                  >
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />
+                    선수 등록
+                  </Button>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 max-md:hidden ${openSections.playerList ? 'rotate-180' : ''}`}
+                  />
+                </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent forceMount className={COLLAPSIBLE_MOBILE_OPEN}>
             <CardContent className="pt-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsAddPlayerModalOpen(true)}
+                className="w-full mb-3 md:hidden"
+              >
+                <UserPlus className="h-3.5 w-3.5 mr-1" />
+                선수 등록
+              </Button>
               <PlayerList
                 players={players}
                 onRemovePlayer={handleRemovePlayer}
@@ -588,6 +633,7 @@ export default function GameManagerPage() {
                 onTogglePinned={handleTogglePinned}
                 onToggleAttending={handleToggleAttending}
                 onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
+                onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
@@ -600,7 +646,11 @@ export default function GameManagerPage() {
       </Collapsible>
 
       {/* Section 3: Team Picker */}
-      <Collapsible open={openSections.teamPicker} onOpenChange={() => toggleSection('teamPicker')}>
+      <Collapsible
+        open={openSections.teamPicker}
+        onOpenChange={() => toggleSection('teamPicker')}
+        className={mobileOnly('pick')}
+      >
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
@@ -642,13 +692,13 @@ export default function GameManagerPage() {
                     )}
                   </div>
                   <ChevronDown
-                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.teamPicker ? 'rotate-180' : ''}`}
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 max-md:hidden ${openSections.teamPicker ? 'rotate-180' : ''}`}
                   />
                 </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent forceMount className={COLLAPSIBLE_MOBILE_OPEN}>
             <CardContent className="pt-0">
               {isCustomPicking ? (
                 <CustomTeamPicker
@@ -672,6 +722,7 @@ export default function GameManagerPage() {
                   onCustomPick={handleStartCustomPicking}
                   onCancelPick={handleCancelPick}
                   onReorderPickedPlayers={setPickedPlayers}
+                  onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
                 />
               )}
             </CardContent>
@@ -680,7 +731,11 @@ export default function GameManagerPage() {
       </Collapsible>
 
       {/* Section 3.5: Game Queue */}
-      <Collapsible open={openSections.queue} onOpenChange={() => toggleSection('queue')}>
+      <Collapsible
+        open={openSections.queue}
+        onOpenChange={() => toggleSection('queue')}
+        className={mobileOnly('queue')}
+      >
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
@@ -690,12 +745,12 @@ export default function GameManagerPage() {
                   {queue.length > 0 && <span className="text-sm text-gray-500 ml-2">({queue.length}개)</span>}
                 </CardTitle>
                 <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.queue ? 'rotate-180' : ''}`}
+                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 max-md:hidden ${openSections.queue ? 'rotate-180' : ''}`}
                 />
               </div>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent forceMount className={COLLAPSIBLE_MOBILE_OPEN}>
             <CardContent className="pt-0">
               <GameQueue
                 queue={queue}
@@ -703,6 +758,7 @@ export default function GameManagerPage() {
                 players={players}
                 onAssignCourt={handleAssignQueueToCourt}
                 onRemove={handleRemoveFromQueue}
+                highlight={queueArrival.arrival}
               />
             </CardContent>
           </CollapsibleContent>
@@ -710,7 +766,11 @@ export default function GameManagerPage() {
       </Collapsible>
 
       {/* Section 4: Court Manager */}
-      <Collapsible open={openSections.courtManager} onOpenChange={() => toggleSection('courtManager')}>
+      <Collapsible
+        open={openSections.courtManager}
+        onOpenChange={() => toggleSection('courtManager')}
+        className={mobileOnly('courts')}
+      >
         <Card className="mb-3">
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
@@ -737,13 +797,13 @@ export default function GameManagerPage() {
                     코트 추가
                   </Button>
                   <ChevronDown
-                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.courtManager ? 'rotate-180' : ''}`}
+                    className={`h-4 w-4 text-gray-500 transition-transform duration-200 max-md:hidden ${openSections.courtManager ? 'rotate-180' : ''}`}
                   />
                 </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent forceMount className={COLLAPSIBLE_MOBILE_OPEN}>
             <CardContent className="pt-0">
               <CourtManager
                 courts={courts}
@@ -756,70 +816,18 @@ export default function GameManagerPage() {
                 onEndGame={handleEndCourtGame}
                 onCancelGame={handleCancelCourtGame}
                 onMoveGame={handleMoveCourtGame}
+                highlight={courtArrival.arrival}
               />
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
 
-      {/* Section 5: Game History & Stats */}
-      <Collapsible open={openSections.gameHistory} onOpenChange={() => toggleSection('gameHistory')}>
-        <Card className="mb-3">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">게임 기록 ({games.length})</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.gameHistory ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0 max-h-[60vh] overflow-y-auto scroll-fade">
-              <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* Section 6: Reset Actions */}
-      <Collapsible open={openSections.resetActions} onOpenChange={() => toggleSection('resetActions')}>
-        <Card className="mb-4">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-3 cursor-pointer select-none hover:bg-gray-50 rounded-t-lg transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">초기화</CardTitle>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${openSections.resetActions ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Button onClick={handleResetPlayerStates} variant="secondary" size="sm">
-                  상태 초기화
-                </Button>
-                <Button onClick={handleResetAttendance} variant="secondary" size="sm">
-                  참석 전체 해제
-                </Button>
-                <Button onClick={handleResetGames} variant="outline" size="sm">
-                  게임 기록 초기화
-                </Button>
-                <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                  선수 목록 초기화
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                ⚠️ 상태 초기화: 휴식·필수포함·준비완료 해제 | 참석 해제: 오늘 참석 전원 off | 게임/선수 초기화: 되돌릴
-                수 없음
-              </p>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+      <PlayerAddModal
+        isOpen={isAddPlayerModalOpen}
+        onClose={() => setIsAddPlayerModalOpen(false)}
+        onAddPlayer={handleAddPlayer}
+      />
 
       {/* Player Edit Modal */}
       <PlayerEditModal
@@ -837,6 +845,38 @@ export default function GameManagerPage() {
         onConfirm={handleBulkAttending}
       />
 
+      <Sheet open={isMoreSheetOpen} onOpenChange={setIsMoreSheetOpen}>
+        <SheetContent className="flex flex-col">
+          <SheetHeader className="shrink-0">
+            <SheetTitle>게임 기록 ({games.length}) · 초기화</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-fade px-4">
+            <GameHistory games={games} players={players} onRemoveGame={handleRemoveGame} />
+          </div>
+          <div className="shrink-0 px-4 pb-6 border-t pt-4">
+            <h3 className="text-sm font-medium mb-2">초기화</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handleResetPlayerStates} variant="secondary" size="sm">
+                상태 초기화
+              </Button>
+              <Button onClick={handleResetAttendance} variant="secondary" size="sm">
+                참석 전체 해제
+              </Button>
+              <Button onClick={handleResetGames} variant="outline" size="sm">
+                게임 기록 초기화
+              </Button>
+              <Button onClick={handleResetPlayers} variant="destructive" size="sm">
+                선수 목록 초기화
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              ⚠️ 상태 초기화: 휴식·필수포함·준비완료 해제 | 참석 해제: 오늘 참석 전원 off | 게임/선수 초기화: 되돌릴 수
+              없음
+            </p>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* 이메일로 처음 가입해 돌아온 사람은 온보딩 모달이 함께 뜬다. 온보딩을 먼저 보여주고,
           끝나거나 닫히면 이어서 띄운다(열림 상태 자체는 그대로 두므로 플래그 처리와 무관하다). */}
       <MigrateModal
@@ -844,6 +884,8 @@ export default function GameManagerPage() {
         onClose={() => setIsMigrateModalOpen(false)}
         players={players}
       />
+
+      <MobileTabBar tabs={mobileTabs} active={mobileTab} onChange={(key) => setMobileTab(key as MobileSection)} />
     </div>
   );
 }
