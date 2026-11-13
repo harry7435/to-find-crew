@@ -22,6 +22,10 @@ import GameQueue from '@/components/game-manager/GameQueue';
 import { randomTeamPicker } from '@/utils/smartTeamPicker';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { notifyGameStarted } from '@/lib/push';
+import { useArrivalHighlight, samePlayerSet } from '@/hooks/useArrivalHighlight';
+import MobileTabBar from '@/components/layout/MobileTabBar';
+
+type MobileSection = 'players' | 'pick' | 'queue' | 'courts';
 
 interface OrganizerBoardProps {
   sessionId: string;
@@ -69,9 +73,44 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<'pool' | 'pick'>('pool');
+  // 모바일 전용 하단 탭. 인원/팀뽑기는 왼쪽 카드의 leftTab과 같은 화면이라 서로 맞춘다.
+  const [mobileTab, setMobileTab] = useState<MobileSection>('players');
+  const handleMobileTab = useCallback((key: string) => {
+    const next = key as MobileSection;
+    setMobileTab(next);
+    if (next === 'players') setLeftTab('pool');
+    if (next === 'pick') setLeftTab('pick');
+  }, []);
   // 코트 관리가 대기열보다 중요한 정보라, 기본값은 접어서 코트 관리가 남는 세로 공간을 다 쓰게 한다.
   const [isQueueExpanded, setIsQueueExpanded] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('attending');
+  // 확정 요청 중에는 뽑은 4명을 화면에 남겨 두고 버튼만 잠근다. 예전처럼 먼저 비우면
+  // 응답이 올 때까지 팀이 화면 어디에도 없는 공백이 생겨 "어디 갔지?"가 된다.
+  const [isSubmittingGame, setIsSubmittingGame] = useState(false);
+  const [assigning, setAssigning] = useState<{ queueItemId: string; courtId: string } | null>(null);
+  const queueArrival = useArrivalHighlight();
+  const courtArrival = useArrivalHighlight();
+  // 방금 내가 확정한 4명. enqueueGame은 성공 시 loadSnapshot까지 끝낸 뒤 true를 돌려주므로,
+  // 이 값을 세팅한 다음 렌더의 queue에는 새 항목이 이미 들어 있다 — 아래 effect가 그걸 찾아 강조한다.
+  const [pendingEnqueue, setPendingEnqueue] = useState<string[] | null>(null);
+  // 의존성 배열에 멤버 접근식을 넣지 않도록 안정적인 함수를 꺼내 둔다.
+  const flashQueue = queueArrival.flash;
+  const flashCourt = courtArrival.flash;
+
+  useEffect(() => {
+    if (!pendingEnqueue) return;
+    setPendingEnqueue(null);
+    const idx = queue.findIndex((q) => samePlayerSet(q.playerIds, pendingEnqueue));
+    if (idx === -1) {
+      // 그 사이 다른 운영자가 배정·취소했으면 강조할 대상이 없다.
+      toast.success('대기열에 추가했어요');
+      return;
+    }
+    setIsQueueExpanded(true);
+    setMobileTab('queue');
+    flashQueue(queue[idx].id, `방금 추가 · ${idx + 1}번째`);
+    toast.success(`대기열 ${idx + 1}번째로 추가했어요`);
+  }, [pendingEnqueue, queue, flashQueue]);
 
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -103,7 +142,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   const handleAddPlayer = useCallback(
     async (playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
       if (await addPlayer(playerData)) {
-        toast.success(`${playerData.name} 선수가 등록되었습니다 (미참석 상태)`);
+        toast.success(`${playerData.name} 선수를 등록했어요`);
       }
     },
     [addPlayer],
@@ -145,21 +184,21 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   }, [players]);
 
   const handleConfirmGame = useCallback(async () => {
-    if (!pickedPlayers) return;
+    if (!pickedPlayers || isSubmittingGame) return;
     const picked = pickedPlayers;
     const playerIds = picked.map((p) => p.id) as [string, string, string, string];
-    // 응답을 기다리는 동안 확정 버튼이 다시 눌려 같은 4명이 두 번 들어가지 않도록 먼저 비우고,
-    // 실패하면 뽑아 둔 4명을 되살려 바로 다시 시도할 수 있게 한다.
-    setPickedPlayers(null);
-    setIsCustomPicking(false);
-    if (await enqueueGame(playerIds)) {
-      toast.success('대기열에 추가되었습니다', {
-        description: `선수: ${picked.map((p) => p.name).join(', ')}`,
-      });
-    } else {
-      setPickedPlayers(picked);
+    setIsSubmittingGame(true);
+    try {
+      if (await enqueueGame(playerIds)) {
+        setPickedPlayers(null);
+        setIsCustomPicking(false);
+        setPendingEnqueue(playerIds);
+      }
+      // 실패하면 뽑아 둔 4명이 그대로 남아 있으므로 바로 다시 시도할 수 있다.
+    } finally {
+      setIsSubmittingGame(false);
     }
-  }, [pickedPlayers, enqueueGame]);
+  }, [pickedPlayers, isSubmittingGame, enqueueGame]);
 
   const handleCancelPick = useCallback(() => {
     setPickedPlayers(null);
@@ -167,14 +206,22 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
 
   const handleAssignQueueToCourt = useCallback(
     async (queueItemId: string, courtId: string) => {
+      if (assigning) return;
       const court = courts.find((c) => c.id === courtId);
-      if (await assignQueueToCourt(queueItemId, courtId)) {
-        toast.success(`${court?.name ?? '코트'}에 배정되었습니다!`);
-        // 대기열 항목 id가 곧 board_games.id 다. 기다리지 않는다 — 알림 실패가 보드 조작을 막으면 안 된다.
-        notifyGameStarted(queueItemId);
+      setAssigning({ queueItemId, courtId });
+      try {
+        if (await assignQueueToCourt(queueItemId, courtId)) {
+          flashCourt(courtId, '게임 시작');
+          setMobileTab('courts');
+          toast.success(`${court?.name ?? '코트'}에서 게임을 시작했어요`);
+          // 대기열 항목 id가 곧 board_games.id 다. 기다리지 않는다 — 알림 실패가 보드 조작을 막으면 안 된다.
+          notifyGameStarted(queueItemId);
+        }
+      } finally {
+        setAssigning(null);
       }
     },
-    [assignQueueToCourt, courts],
+    [assigning, assignQueueToCourt, courts, flashCourt],
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -268,24 +315,23 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   // 직접 고른 4명은 선택 화면이 이미 코트 박스 미리보기로 보여주므로, 랜덤 뽑기처럼 결과 확인
   // 단계를 한 번 더 거치지 않고 확정 한 번으로 대기열에 넣는다.
   const handleCustomConfirm = useCallback(async () => {
-    if (selectedPlayers.length !== 4) return;
+    if (selectedPlayers.length !== 4 || isSubmittingGame) return;
     const picked = selectedPlayers;
     const playerIds = picked.map((p) => p.id) as [string, string, string, string];
-    // 응답을 기다리는 동안 확정이 다시 눌리지 않도록 선택 화면을 먼저 닫고,
-    // 실패하면 고른 4명 그대로 선택 화면을 되살려 바로 다시 시도할 수 있게 한다.
-    setIsCustomPicking(false);
-    setPickedPlayers(null);
-    setSelectedPlayers([]);
-    setIsEditingCustomPick(false);
-    if (await enqueueGame(playerIds)) {
-      toast.success('대기열에 추가되었습니다', {
-        description: `선수: ${picked.map((p) => p.name).join(', ')}`,
-      });
-    } else {
-      setSelectedPlayers(picked);
-      setIsCustomPicking(true);
+    setIsSubmittingGame(true);
+    try {
+      if (await enqueueGame(playerIds)) {
+        setIsCustomPicking(false);
+        setPickedPlayers(null);
+        setSelectedPlayers([]);
+        setIsEditingCustomPick(false);
+        setPendingEnqueue(playerIds);
+      }
+      // 실패하면 선택 화면과 고른 4명이 그대로 남아 있으므로 바로 다시 시도할 수 있다.
+    } finally {
+      setIsSubmittingGame(false);
     }
-  }, [selectedPlayers, enqueueGame]);
+  }, [selectedPlayers, isSubmittingGame, enqueueGame]);
 
   const handleCustomCancel = useCallback(() => {
     setIsCustomPicking(false);
@@ -449,6 +495,9 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     }
   }, [players, resetWaitingTimes, confirm]);
 
+  // 모바일에서 활성 탭이 아닌 섹션은 숨긴다. 데스크톱에서는 flex 아이템이라 max-md로만 숨긴다.
+  const mobileOnly = (sections: MobileSection[]) => (sections.includes(mobileTab) ? '' : 'max-md:hidden');
+
   if (isLoading) {
     return (
       <div className="py-8 text-center">
@@ -462,14 +511,17 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     <div className="flex flex-col gap-3 md:h-full md:overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:flex-1 md:min-h-0">
         {/* 왼쪽: 인원 풀 / 팀 뽑기 탭 전환 — 활성 탭이 컬럼 전체 높이를 쓰고 그 안에서만 스크롤된다 */}
-        <Card className="md:min-h-0">
+        <Card className={`md:min-h-0 ${mobileOnly(['players', 'pick'])}`}>
           <Tabs
             value={leftTab}
-            onValueChange={(v) => setLeftTab(v as 'pool' | 'pick')}
+            onValueChange={(v) => {
+              setLeftTab(v as 'pool' | 'pick');
+              setMobileTab(v === 'pool' ? 'players' : 'pick');
+            }}
             className="gap-3 md:flex-1 md:min-h-0"
           >
-            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-6">
-              <TabsList>
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-6 max-md:hidden">
+              <TabsList className="max-md:hidden">
                 <TabsTrigger value="pool">인원 풀</TabsTrigger>
                 <TabsTrigger value="pick">팀 뽑기</TabsTrigger>
               </TabsList>
@@ -481,31 +533,45 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                   </Button>
                 ) : isCustomPicking ? (
                   <>
-                    <Button size="sm" onClick={handleCustomConfirm} disabled={selectedPlayers.length !== 4}>
-                      확정
+                    <Button
+                      size="sm"
+                      onClick={handleCustomConfirm}
+                      disabled={selectedPlayers.length !== 4 || isSubmittingGame}
+                    >
+                      {isSubmittingGame ? '대기열에 넣는 중…' : '확정'}
                     </Button>
                     {selectedPlayers.length === 4 && !isEditingCustomPick && (
-                      <Button size="sm" variant="outline" onClick={() => setIsEditingCustomPick(true)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsEditingCustomPick(true)}
+                        disabled={isSubmittingGame}
+                      >
                         다시 선택
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={handleCustomCancel}>
+                    <Button size="sm" variant="outline" onClick={handleCustomCancel} disabled={isSubmittingGame}>
                       취소
                     </Button>
                   </>
                 ) : (
                   pickedPlayers && (
                     <>
-                      <Button size="sm" onClick={handleConfirmGame}>
-                        확정
+                      <Button size="sm" onClick={handleConfirmGame} disabled={isSubmittingGame}>
+                        {isSubmittingGame ? '대기열에 넣는 중…' : '확정'}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleRandomPickTeams}>
+                      <Button size="sm" variant="outline" onClick={handleRandomPickTeams} disabled={isSubmittingGame}>
                         다시 뽑기
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleStartCustomPicking}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleStartCustomPicking}
+                        disabled={isSubmittingGame}
+                      >
                         직접 선택
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleCancelPick}>
+                      <Button size="sm" variant="outline" onClick={handleCancelPick} disabled={isSubmittingGame}>
                         취소
                       </Button>
                     </>
@@ -533,6 +599,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onTogglePinned={handleTogglePinned}
                 onToggleAttending={handleToggleAttending}
                 onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
+                onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
@@ -553,6 +620,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                   isEditingSelection={isEditingCustomPick}
                   onEditingSelectionChange={setIsEditingCustomPick}
                   boundedOnDesktop
+                  isSubmitting={isSubmittingGame}
                 />
               ) : (
                 <TeamPicker
@@ -565,6 +633,8 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                   onCustomPick={handleStartCustomPicking}
                   onCancelPick={handleCancelPick}
                   onReorderPickedPlayers={setPickedPlayers}
+                  onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
+                  isSubmitting={isSubmittingGame}
                 />
               )}
             </TabsContent>
@@ -573,8 +643,8 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
 
         {/* 오른쪽: 코트 관리 + 대기열 (세로로 쌓임). 대기열이 상대적으로 덜 중요해 기본 접힘 —
             접힌 동안은 코트 관리(flex-1)가 남는 세로 공간을 전부 차지한다 */}
-        <div className="flex flex-col gap-3 md:min-h-0">
-          <Card className="gap-3 md:flex-1 md:min-h-0">
+        <div className="flex flex-col gap-3 md:min-h-0 max-md:contents">
+          <Card className={`gap-3 md:flex-1 md:min-h-0 ${mobileOnly(['courts'])}`}>
             <CardHeader className="shrink-0 pb-3">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">
@@ -603,11 +673,12 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onEndGame={handleEndCourtGame}
                 onCancelGame={handleCancelCourtGame}
                 onMoveGame={handleMoveCourtGame}
+                highlight={courtArrival.arrival}
               />
             </CardContent>
           </Card>
 
-          <Card className={`gap-3 ${isQueueExpanded ? 'md:flex-1 md:min-h-0' : 'shrink-0'}`}>
+          <Card className={`gap-3 ${isQueueExpanded ? 'md:flex-1 md:min-h-0' : 'shrink-0'} ${mobileOnly(['queue'])}`}>
             <CardHeader className="shrink-0 pb-3">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base md:text-lg">
@@ -618,23 +689,27 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                   size="sm"
                   variant="ghost"
                   onClick={() => setIsQueueExpanded((v) => !v)}
-                  title={isQueueExpanded ? '대기열 접기' : '대기열 펼치기'}
+                  className="text-xs text-gray-600 max-md:hidden"
                 >
-                  {isQueueExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {isQueueExpanded ? '접기' : `대기 ${queue.length}게임`}
+                  {isQueueExpanded ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
                 </Button>
               </div>
             </CardHeader>
-            {isQueueExpanded && (
-              <CardContent className="pt-0 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade">
-                <GameQueue
-                  queue={queue}
-                  courts={courts}
-                  players={players}
-                  onAssignCourt={handleAssignQueueToCourt}
-                  onRemove={handleRemoveFromQueue}
-                />
-              </CardContent>
-            )}
+            {/* 모바일은 탭 자체가 대기열이라 항상 렌더하고, 데스크톱만 접힘 상태에서 숨긴다 */}
+            <CardContent
+              className={`pt-0 md:flex-1 md:min-h-0 md:overflow-y-auto scroll-fade ${isQueueExpanded ? '' : 'md:hidden'}`}
+            >
+              <GameQueue
+                queue={queue}
+                courts={courts}
+                players={players}
+                onAssignCourt={handleAssignQueueToCourt}
+                onRemove={handleRemoveFromQueue}
+                assigning={assigning}
+                highlight={queueArrival.arrival}
+              />
+            </CardContent>
           </Card>
         </div>
       </div>
@@ -687,6 +762,21 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         isOpen={isAddPlayerModalOpen}
         onClose={() => setIsAddPlayerModalOpen(false)}
         onAddPlayer={handleAddPlayer}
+      />
+
+      <MobileTabBar
+        tabs={[
+          { key: 'players', label: '인원', badge: players.filter((p) => p.attending).length },
+          { key: 'pick', label: '팀뽑기' },
+          { key: 'queue', label: '대기', badge: queue.length },
+          {
+            key: 'courts',
+            label: '코트',
+            badge: `${courts.filter((c) => c.playerIds !== null).length}/${courts.length}`,
+          },
+        ]}
+        active={mobileTab}
+        onChange={handleMobileTab}
       />
     </div>
   );

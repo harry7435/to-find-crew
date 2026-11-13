@@ -27,6 +27,8 @@ interface CustomTeamPickerProps {
    *  false(기본값)면 조상이 높이를 주지 않는 일반 페이지(예: /game-manager)이므로
    *  자체 max-height로만 안전하게 스크롤을 제한한다. */
   boundedOnDesktop?: boolean;
+  /** 확정 요청이 진행 중이면 true. 고른 4명을 남겨 둔 채 버튼을 잠근다(보드 전용, 체험판은 생략). */
+  isSubmitting?: boolean;
 }
 
 function getSkillLevelColor(level?: string): string {
@@ -73,6 +75,7 @@ export default function CustomTeamPicker({
   isEditingSelection,
   onEditingSelectionChange,
   boundedOnDesktop = false,
+  isSubmitting = false,
 }: CustomTeamPickerProps) {
   const now = useTicker();
   const [sort, setSort] = useState<SortOption>('wait');
@@ -218,15 +221,21 @@ export default function CustomTeamPicker({
 
       {/* Action Buttons (모바일 전용 — PC/태블릿은 카드 헤더에 표시) */}
       <div className="flex gap-2 justify-center md:hidden">
-        <Button onClick={onConfirm} size="lg" disabled={!isComplete} className="flex-1">
-          확정
+        <Button onClick={onConfirm} size="lg" disabled={!isComplete || isSubmitting} className="flex-1">
+          {isSubmitting ? '대기열에 넣는 중…' : '확정'}
         </Button>
         {isComplete && !isEditingSelection && (
-          <Button variant="outline" size="lg" onClick={() => onEditingSelectionChange(true)} className="flex-1">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => onEditingSelectionChange(true)}
+            className="flex-1"
+            disabled={isSubmitting}
+          >
             다시 선택
           </Button>
         )}
-        <Button onClick={onCancel} variant="outline" size="lg" className="flex-1">
+        <Button onClick={onCancel} variant="outline" size="lg" className="flex-1" disabled={isSubmitting}>
           취소
         </Button>
       </div>

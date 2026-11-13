@@ -248,8 +248,19 @@ export function useBoardRealtime(sessionId: string) {
         return fail('선수 등록에 실패했습니다', error ?? new Error('no row returned'));
       }
 
-      // 상태 행 생성이 실패해도 loadSnapshot의 누락 행 보충이 다시 만들어 주므로 결과를 확인하지 않는다.
-      await supabase.from('board_player_state').insert([{ session_id: sessionId, guest_participant_id: guest.id }]);
+      // 운영자가 현장에서 직접 등록하는 사람은 지금 와 있는 사람이므로 바로 참석+대기로 넣는다.
+      // (기존 setAttending(id, true)가 미참석자를 참석시킬 때 쓰는 값과 같다.)
+      // 상태 행 생성이 실패해도 loadSnapshot의 누락 행 보충이 다시 만들어 주므로 결과를 확인하지 않는다 —
+      // 그 경우엔 DB 기본값(미참석)으로 생기며, 빈 목록 안내의 [참석자 선택]으로 복구할 수 있다.
+      await supabase.from('board_player_state').insert([
+        {
+          session_id: sessionId,
+          guest_participant_id: guest.id,
+          attending: true,
+          player_status: 'active',
+          waiting_since: new Date().toISOString(),
+        },
+      ]);
       await loadSnapshot();
       return true;
     },

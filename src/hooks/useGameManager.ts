@@ -163,12 +163,13 @@ export function useGameManager() {
   }, [queue, isLoading]);
 
   const addPlayer = useCallback((playerData: Omit<Player, 'id' | 'status' | 'attending' | 'waitingSince'>) => {
+    // 등록하는 사람은 지금 와 있는 사람이므로 바로 참석+대기로 넣는다(setAttending(id, true)와 같은 값).
     const newPlayer: Player = {
       ...playerData,
       id: crypto.randomUUID(),
-      status: 'resting',
-      attending: false,
-      waitingSince: null,
+      status: 'active',
+      attending: true,
+      waitingSince: new Date().toISOString(),
     };
     setPlayers((prev) => [...prev, newPlayer]);
   }, []);

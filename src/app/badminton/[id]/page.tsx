@@ -1,5 +1,6 @@
 'use client';
 
+import { MOBILE_TAB_BAR_PADDING } from '@/components/layout/MobileTabBar';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -307,7 +308,12 @@ export default function SessionDetailPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 px-4 sm:px-6 lg:px-8 py-4 md:h-[calc(100vh-4rem)] md:overflow-hidden">
+      {/* 보드가 렌더될 때만 하단 탭 바 여백을 둔다 (종료된 모임엔 바가 없다). 보드 뒤의 게스트 카드까지 가리지 않도록 바깥 래퍼에 둔다. */}
+      <div
+        className={`flex flex-col gap-3 px-4 sm:px-6 lg:px-8 py-4 md:h-[calc(100vh-4rem)] md:overflow-hidden ${
+          session.status !== 'completed' ? MOBILE_TAB_BAR_PADDING : ''
+        }`}
+      >
         {/* 헤더 + 번개 모임 정보 요약 (한 줄로 축소) */}
         <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-white px-3 py-2">
           <Button variant="ghost" size="sm" onClick={() => router.back()}>

@@ -16,6 +16,7 @@ import {
   ListChecks,
   MoreVertical,
   CheckCircle2,
+  UserPlus,
 } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
@@ -37,6 +38,8 @@ interface PlayerListProps {
   onTogglePinned: (id: string) => void;
   onToggleAttending: (id: string) => void;
   onOpenAttendancePicker: () => void;
+  /** 등록된 선수가 0명일 때 빈 상태에서 등록 진입점을 연다. 보드와 체험판 모두 등록 모달. */
+  onAddPlayerClick: () => void;
   filter: AttendanceFilter;
   onFilterChange: (filter: AttendanceFilter) => void;
   gameCountsMap?: Map<string, number>;
@@ -82,6 +85,7 @@ export default function PlayerList({
   onTogglePinned,
   onToggleAttending,
   onOpenAttendancePicker,
+  onAddPlayerClick,
   filter,
   onFilterChange,
   gameCountsMap,
@@ -184,9 +188,21 @@ export default function PlayerList({
       </div>
 
       {players.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <p>등록된 선수가 없습니다</p>
-          <p className="text-sm mt-2">위 폼에서 선수를 등록해주세요</p>
+        <div className="flex flex-col items-center gap-3 py-8 text-center text-gray-500">
+          <p className="text-sm">&apos;선수 등록&apos; 버튼으로 오늘 온 사람을 추가하세요</p>
+          <Button size="sm" onClick={onAddPlayerClick}>
+            <UserPlus className="h-3.5 w-3.5 mr-1" />
+            선수 등록
+          </Button>
+        </div>
+      ) : sortedPlayers.length === 0 && filter === 'attending' && absentCount > 0 ? (
+        // 코드로 참가한 사람은 미참석으로 들어오므로, 첫 화면이 "0명"으로 막히지 않게 참석 처리로 바로 안내한다.
+        <div className="flex flex-col items-center gap-3 py-6 text-center text-gray-500">
+          <p className="text-sm">신청자 {absentCount}명이 있어요. 오늘 온 사람을 참석 처리해야 팀 뽑기에 들어가요</p>
+          <Button size="sm" onClick={onOpenAttendancePicker}>
+            <ListChecks className="h-3.5 w-3.5 mr-1" />
+            참석자 선택
+          </Button>
         </div>
       ) : sortedPlayers.length === 0 ? (
         <div className="text-center py-6 text-gray-500 text-sm">해당 조건의 선수가 없습니다</div>
@@ -264,13 +280,20 @@ export default function PlayerList({
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <input
-                    type="checkbox"
-                    checked={isAttending}
-                    onChange={() => onToggleAttending(player.id)}
-                    className="h-4 w-4 shrink-0 accent-blue-600"
-                    title={isAttending ? '오늘 참석 해제' : '오늘 참석 체크'}
-                  />
+                  {/* 작은 체크박스는 의미가 hover 툴팁에만 있어 터치에서 안 보였다 — 글자가 보이는 토글로 바꾼다. */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isAttending}
+                    onClick={() => onToggleAttending(player.id)}
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                      isAttending
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-gray-300 bg-white text-gray-500 hover:border-blue-400 hover:text-blue-600'
+                    }`}
+                  >
+                    {isAttending ? '✓ 참석' : '참석'}
+                  </button>
                   <span
                     className={`text-base md:text-lg font-semibold ${
                       !isAttending || isResting ? 'text-gray-500' : getGenderColor(player.gender)

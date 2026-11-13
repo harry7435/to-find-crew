@@ -9,6 +9,7 @@ import { X, Pencil, Check, Clock, ArrowLeftRight } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
 import TeamCourtBox from '@/components/game-manager/TeamCourtBox';
+import { Arrival, scrollToArrival } from '@/hooks/useArrivalHighlight';
 
 const UNKNOWN_PLAYER: Player = { id: 'unknown', name: '알 수 없음', status: 'active' };
 
@@ -23,6 +24,8 @@ interface CourtManagerProps {
   onEndGame: (id: string) => void;
   onCancelGame: (id: string) => void;
   onMoveGame: (fromCourtId: string, toCourtId: string) => void;
+  /** 방금 내 배정으로 게임이 올라간 코트. 해당 카드를 강조하고 화면에 보이게 스크롤한다. */
+  highlight?: Arrival | null;
 }
 
 export default function CourtManager({
@@ -36,6 +39,7 @@ export default function CourtManager({
   onEndGame,
   onCancelGame,
   onMoveGame,
+  highlight = null,
 }: CourtManagerProps) {
   const now = useTicker();
   const [addingName, setAddingName] = useState('');
@@ -45,6 +49,11 @@ export default function CourtManager({
   const [movingId, setMovingId] = useState<string | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const courtRefs = useRef(new Map<string, HTMLDivElement>());
+
+  useEffect(() => {
+    if (highlight) scrollToArrival(courtRefs.current.get(highlight.id) ?? null);
+  }, [highlight]);
 
   useEffect(() => {
     if (isAdding) {
@@ -117,10 +126,25 @@ export default function CourtManager({
             return (
               <div
                 key={court.id}
-                className={`border rounded-lg p-3 ${
-                  isActive ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                ref={(el) => {
+                  if (el) courtRefs.current.set(court.id, el);
+                  else courtRefs.current.delete(court.id);
+                }}
+                // 도착 강조 scrollIntoView가 고정 헤더·하단 바 밑으로 가지 않도록 스크롤 여백을 둔다
+                className={`scroll-mt-20 max-md:scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] border rounded-lg p-3 ${
+                  highlight?.id === court.id
+                    ? 'relative bg-green-50 border-amber-400'
+                    : isActive
+                      ? 'bg-green-50 border-green-300'
+                      : 'bg-gray-50 border-gray-200'
                 }`}
               >
+                {highlight?.id === court.id && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-amber-400 motion-safe:animate-pulse"
+                  />
+                )}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     {isEditing ? (
@@ -153,6 +177,9 @@ export default function CourtManager({
                           <Badge variant="outline" className="text-gray-500 text-xs shrink-0">
                             대기중
                           </Badge>
+                        )}
+                        {highlight?.id === court.id && (
+                          <Badge className="bg-amber-500 text-white text-xs shrink-0">{highlight?.label}</Badge>
                         )}
                       </>
                     )}

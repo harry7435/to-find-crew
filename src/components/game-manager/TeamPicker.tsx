@@ -15,6 +15,10 @@ interface TeamPickerProps {
   onCustomPick: () => void;
   onCancelPick: () => void;
   onReorderPickedPlayers: (next: [Player, Player, Player, Player]) => void;
+  /** 활성 선수가 4명 미만인데 미참석 선수가 있을 때 참석자 선택 피커를 연다. 없으면 버튼을 숨긴다. */
+  onOpenAttendancePicker?: () => void;
+  /** 확정 요청이 진행 중이면 true. 뽑힌 카드를 남겨 둔 채 버튼을 잠가 중복 확정을 막는다. */
+  isSubmitting?: boolean;
 }
 
 export default function TeamPicker({
@@ -27,6 +31,8 @@ export default function TeamPicker({
   onCustomPick,
   onCancelPick,
   onReorderPickedPlayers,
+  onOpenAttendancePicker,
+  isSubmitting = false,
 }: TeamPickerProps) {
   const activePlayers = players.filter((p) => p.status === 'active');
   const canPick = activePlayers.length >= 4;
@@ -39,6 +45,11 @@ export default function TeamPicker({
         </Button>
         {!canPick && (
           <p className="text-sm text-gray-500">최소 4명의 활성 선수가 필요합니다 (현재: {activePlayers.length}명)</p>
+        )}
+        {!canPick && onOpenAttendancePicker && players.some((p) => !p.attending) && (
+          <Button variant="secondary" size="sm" onClick={onOpenAttendancePicker}>
+            미참석 {players.filter((p) => !p.attending).length}명 중 참석자 선택
+          </Button>
         )}
         <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full max-w-xs">
           직접 선택
@@ -58,7 +69,7 @@ export default function TeamPicker({
                 <TeamCourtBox
                   players={pickedPlayers}
                   size="hero"
-                  interactive
+                  interactive={!isSubmitting}
                   onChange={onReorderPickedPlayers}
                   showPartnerCounts
                   games={games}
@@ -80,17 +91,23 @@ export default function TeamPicker({
         className="flex flex-col gap-2 md:hidden"
       >
         <div className="flex gap-3">
-          <Button onClick={onConfirm} size="lg" className="flex-1">
-            확정
+          <Button onClick={onConfirm} size="lg" className="flex-1" disabled={isSubmitting}>
+            {isSubmitting ? '대기열에 넣는 중…' : '확정'}
           </Button>
-          <Button onClick={onReject} variant="outline" size="lg" className="flex-1">
+          <Button onClick={onReject} variant="outline" size="lg" className="flex-1" disabled={isSubmitting}>
             다시 뽑기
           </Button>
         </div>
-        <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full">
+        <Button variant="outline" size="lg" onClick={onCustomPick} className="w-full" disabled={isSubmitting}>
           직접 선택
         </Button>
-        <Button variant="ghost" size="lg" onClick={onCancelPick} className="w-full text-gray-500">
+        <Button
+          variant="ghost"
+          size="lg"
+          onClick={onCancelPick}
+          className="w-full text-gray-500"
+          disabled={isSubmitting}
+        >
           취소
         </Button>
       </motion.div>
