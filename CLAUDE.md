@@ -139,11 +139,17 @@
 - **Claude may stage and commit on its own, without asking first** (changed 2026-11-13; this
   replaces the earlier "never commit" rule). Commit at natural checkpoints, e.g. per completed task
   or reviewed fix, using the repo's message style (`feat: …`, `fix: …`, `test: …`, Korean summary).
-- **Always commit with explicit pathspecs** (`git add <paths>` + `git commit -m "…" -- <paths>`),
-  never a bare `git commit` after staging, and run `git status` right before. A bare commit writes
-  the *whole index*, and this repo has twice had pre-existing staged files (a `.gitignore`, a
-  `CLAUDE.md`) swept into an unrelated commit that way. If it happens anyway:
-  `git reset --soft HEAD~1`, then re-commit with pathspecs.
+- **Commit procedure: empty index → `git add <paths>` → plain `git commit` → `git status`.**
+  1. `git diff --cached --name-only` must print nothing before you stage. A commit writes the
+     *whole index*, and this repo has twice had pre-existing staged files (a `.gitignore`, a
+     `CLAUDE.md`) swept into an unrelated commit. If something is already staged and isn't yours,
+     ask instead of committing.
+  2. Stage only your paths, then run a plain `git commit -m "…"` — **not** `git commit -- <paths>`.
+     The pathspec form commits the working-tree files directly while lint-staged formats the
+     index, so the commit is fine but the index is left holding stale pre-format copies (every
+     committed file shows as `MM`). Seen 2026-11-13; fix was `git restore --staged <files>`.
+  3. After committing, `git status` should be clean for the paths you committed.
+  If a commit swept in extra files anyway: `git reset --soft HEAD~1`, unstage the extras, re-commit.
 - No `Co-Authored-By` trailer in commit messages.
 - Still ask first before anything that rewrites or publishes history beyond a normal commit: amend
   or rebase of already-pushed commits, `reset --hard`, force-push, deleting branches, or pushing
