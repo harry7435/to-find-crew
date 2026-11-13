@@ -113,6 +113,19 @@
   login/logout, when `AuthContext` re-runs `getSession()` on an already-mounted page and `loading`
   goes back to `true`. Test auth-state *transitions*, not just fresh page loads. If a third branch
   (error, skeleton) is ever added, it uses `HEADER_CLASS` too.
+- **Board-family pages use `MobileTabBar` below `md`, one section per screen.** `OrganizerBoard`,
+  `/game-manager`, and `SpectatorBoard` hide non-active sections with CSS (`max-md:hidden` /
+  `hidden md:block`) instead of unmounting them, so in-progress UI state (custom-pick selection, picked
+  team, half-filled forms) survives tab switches — don't "optimize" this into conditional rendering.
+  On `/game-manager` the sections are `forceMount`ed `CollapsibleContent` with
+  `data-[state=closed]:hidden max-md:!block`, so they stay open on mobile while desktop collapse still
+  works. Pages using the bar add `MOBILE_TAB_BAR_PADDING` to the outermost page wrapper (so content rendered
+  after the board, e.g. the guest login card on `/badminton/[id]`, is not covered) so the fixed bar never
+  covers the last item. Arrival-highlight targets carry `scroll-mt-20`/`max-md:scroll-mb-*` margins so
+  `scrollIntoView` doesn't land under the header or bar. The bar is `z-40` so Radix sheets/modals (`z-50`) stay above it. Success paths that
+  move work elsewhere (confirm → queue, assign → court) also switch the mobile tab, alongside the
+  arrival highlight — by calling the page's tab setter directly, because `MobileTabBar` scrolls to top
+  only on *manual* tab changes and a programmatic switch must not cancel the highlight's scroll.
 
 ## Legal Pages (`/terms`, `/privacy`)
 
@@ -123,9 +136,20 @@
 
 ## Git Workflow
 
-- **Never run `git add` or `git commit` in this repo, ever, without being explicitly asked in the
-  moment.** The user stages and commits everything themselves. This overrides any other guidance
-  (including older plan documents under `docs/superpowers/plans/`) that suggests otherwise.
+- **Claude may stage and commit on its own, without asking first** (changed 2026-11-13; this
+  replaces the earlier "never commit" rule). Commit at natural checkpoints, e.g. per completed task
+  or reviewed fix, using the repo's message style (`feat: …`, `fix: …`, `test: …`, Korean summary).
+- **Always commit with explicit pathspecs** (`git add <paths>` + `git commit -m "…" -- <paths>`),
+  never a bare `git commit` after staging, and run `git status` right before. A bare commit writes
+  the *whole index*, and this repo has twice had pre-existing staged files (a `.gitignore`, a
+  `CLAUDE.md`) swept into an unrelated commit that way. If it happens anyway:
+  `git reset --soft HEAD~1`, then re-commit with pathspecs.
+- No `Co-Authored-By` trailer in commit messages.
+- Still ask first before anything that rewrites or publishes history beyond a normal commit: amend
+  or rebase of already-pushed commits, `reset --hard`, force-push, deleting branches, or pushing
+  to `main`. Never commit directly on `main` — work on a feature branch.
+- lint-staged runs `eslint --fix` + `prettier --write` on staged ts/tsx at commit time, so the
+  committed files can differ slightly in formatting from the working copy you reviewed.
 
 ## Game Manager Login Migration Pattern
 
@@ -185,11 +209,24 @@
 
 ## Testing / Verification
 
-- No automated test suite (no Jest/Vitest) exists. Don't add one unprompted. Verify changes manually
-  via `pnpm dev` + click-through, and run `pnpm lint` / `pnpm build` before considering work done.
-  `pnpm build` requires real `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars to
-  fully succeed (static generation touches the Supabase client); placeholder values are enough to catch
-  compile/type errors even without a live project.
+- **Playwright e2e exists, but only for login-free screens.** `pnpm test:e2e` runs `e2e/*.spec.ts`
+  against `pnpm dev` (reused if already running; needs `.env.local`) in two chromium projects,
+  `mobile` (375×812, touch) and `desktop` (1280×800). Coverage is limited to `/` and `/game-manager`
+  (localStorage-only). Organizer board, spectator board, invite/join, and anything that needs login or
+  writes to the real Supabase DB are *not* automated — verify those manually (two browsers for
+  realtime/multi-organizer cases). Don't point e2e at the live DB to "cover" them.
+- First run needs the browser binary: `pnpm exec playwright install chromium`.
+- `e2e/game-manager.spec.ts` hides the Next.js dev-mode indicator (`nextjs-portal`) in its top-level
+  `beforeEach` (mobile project only), because in dev it overlaps the leftmost tab of the bottom bar. Don't remove it, or clicks on the '인원' tab
+  fail for no obvious reason.
+- When changing `/` or `/game-manager` UI, update/extend the matching e2e spec in the same change.
+  Prefer role/text selectors (the UI copy is the contract); if copy changes, the spec changes with it.
+- No unit-test runner (Jest/Vitest) exists. Don't add one unprompted.
+- Run `pnpm lint` / `pnpm build` before considering work done. `pnpm lint` also covers `e2e/` and
+  `playwright.config.ts` (`next lint --dir src --dir e2e --file playwright.config.ts`). `pnpm build`
+  requires real `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars to fully succeed
+  (static generation touches the Supabase client); placeholder values are enough to catch compile/type
+  errors even without a live project.
 
 ## Guest Favorites (`/badminton/favorites`) — localStorage-only by design
 
