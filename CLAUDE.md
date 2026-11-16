@@ -199,6 +199,15 @@
   `docs/gotchas/game-manager-board-conventions.md` before "simplifying" any of `CustomTeamPicker.tsx`,
   `TeamCourtBox.tsx`, either hook's `enqueueGame()`, or reordering `useBoardRealtime` writes.
 
+## Board Player Attendance Defaults & Known Backfill Race
+
+- Organizer-added players start attending+active, while code-joined participants start absent (DB
+  defaults via the `loadSnapshot` backfill). Both are deliberate, so don't "unify" them. See
+  `docs/gotchas/board-player-state-defaults.md` before changing either path or the schema defaults.
+- The backfill can beat `addPlayer`'s state-row insert (`UNIQUE (guest_participant_id)`) and leave a
+  just-added player absent. This is a known, accepted gap that needs a new write step to fix. See
+  `docs/gotchas/board-backfill-insert-race.md` before touching `addPlayer` or the backfill.
+
 ## Invite Flow: Guest/Login Duplicate-Participant Prevention
 
 - Guest/login duplicate-person matching is deliberately manual (organizer choice on the invite
@@ -227,6 +236,17 @@
   fail for no obvious reason.
 - When changing `/` or `/game-manager` UI, update/extend the matching e2e spec in the same change.
   Prefer role/text selectors (the UI copy is the contract); if copy changes, the spec changes with it.
+- **Every e2e assertion must be able to fail.** PR #7 shipped three tests that passed regardless of
+  the feature:
+  - a scroll-reset test where the target tab was shorter than the viewport, so `scrollY` clamped
+    to 0 on its own
+  - a bar-overlap test that measured an element whose margin hid a 0px gap
+  - an "empty-state button opens the form" test where the form was already visible on mobile, so
+    the dead button went unnoticed until the user hit it
+  So:
+  - assert the precondition first (the page overflows; the dialog is not open yet)
+  - for a bug fix or layout guard, do a mutation check: temporarily revert the fix, confirm the
+    test fails on the relevant project(s), then restore and confirm it passes
 - No unit-test runner (Jest/Vitest) exists. Don't add one unprompted.
 - Run `pnpm lint` / `pnpm build` before considering work done. `pnpm lint` also covers `e2e/` and
   `playwright.config.ts` (`next lint --dir src --dir e2e --file playwright.config.ts`). `pnpm build`
