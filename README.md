@@ -4,6 +4,26 @@
 
 🔗 https://to-find-crew.vercel.app
 
+## 📸 화면
+
+**홈**
+
+<table><tr>
+<td><img src="docs/images/home-mobile.png" alt="홈 화면 (모바일)" width="240"></td>
+<td><img src="docs/images/home-desktop.png" alt="홈 화면 (데스크톱)" width="560"></td>
+</tr></table>
+
+**게임 매니저 보드**
+
+<table><tr>
+<td><img src="docs/images/game-board-mobile.png" alt="게임 매니저 보드 (모바일)" width="240"></td>
+<td><img src="docs/images/game-board-desktop.png" alt="게임 매니저 보드 (데스크톱)" width="560"></td>
+</tr></table>
+
+**랜덤 뽑기**
+
+<img src="docs/images/random-picker-mobile.png" alt="랜덤 뽑기 (모바일)" width="240">
+
 ## ✨ 주요 기능
 
 ### 게임 매니저 (`/game-manager`)
