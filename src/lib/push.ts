@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { recordApiFailure, reportError } from '@/lib/monitoring';
 
 export type PushSupport = 'supported' | 'ios-needs-install' | 'unsupported';
 
@@ -87,6 +88,7 @@ export async function subscribeToSession(sessionId: string, target: PushTarget):
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidPublicKey) {
     console.error('[push] NEXT_PUBLIC_VAPID_PUBLIC_KEY 가 설정되지 않았습니다');
+    reportError('푸시 알림 VAPID 공개키가 설정되지 않았습니다', null);
     throw new Error('알림 기능이 아직 준비되지 않았어요');
   }
 
@@ -112,6 +114,10 @@ export async function subscribeToSession(sessionId: string, target: PushTarget):
   } catch (err) {
     // 브라우저가 영어 DOMException(AbortError 등)을 던지므로 사용자용 한국어 메시지로 바꾼다.
     console.error('[push] browser subscribe failed:', err);
+    // 권한 거부(NotAllowedError)는 사용자 선택이라 보고하지 않는다.
+    if (!(err instanceof DOMException && err.name === 'NotAllowedError')) {
+      reportError('푸시 브라우저 구독에 실패했습니다', err);
+    }
     throw new Error('알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요');
   }
 
@@ -130,6 +136,7 @@ export async function subscribeToSession(sessionId: string, target: PushTarget):
   });
   if (error) {
     console.error('[push] upsert_push_subscription failed:', error);
+    reportError('푸시 구독 저장에 실패했습니다', error, { sessionId });
     throw new Error('알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요');
   }
 
@@ -143,6 +150,7 @@ export async function unsubscribeFromSession(sessionId: string): Promise<void> {
     subscription = await registration?.pushManager.getSubscription();
   } catch (err) {
     console.error('[push] browser getSubscription failed:', err);
+    reportError('푸시 구독 조회에 실패했습니다', err);
     throw new Error('알림을 끄지 못했어요. 잠시 후 다시 시도해 주세요');
   }
   if (subscription) {
@@ -152,6 +160,7 @@ export async function unsubscribeFromSession(sessionId: string): Promise<void> {
     });
     if (error) {
       console.error('[push] delete_push_subscription failed:', error);
+      reportError('푸시 구독 해제에 실패했습니다', error, { sessionId });
       throw new Error('알림을 끄지 못했어요. 잠시 후 다시 시도해 주세요');
     }
   }
@@ -171,10 +180,12 @@ export function notifyGameStarted(gameId: string): void {
   })
     .then(async (res) => {
       if (!res.ok) {
+        recordApiFailure('POST', '/api/push/game-started', res.status);
         console.error('[push] game-started failed:', res.status, await res.text());
       }
     })
     .catch((err) => {
       console.error('[push] game-started request error:', err);
+      recordApiFailure('POST', '/api/push/game-started', 'network');
     });
 }

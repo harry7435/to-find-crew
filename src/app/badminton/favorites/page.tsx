@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, MapPin, Star, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { reportError } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
 import { getFavoriteSessionIds, removeFavoriteSessionId } from '@/utils/guestFavorites';
 
@@ -52,6 +53,7 @@ export default function FavoritesPage() {
         setSessions((data ?? []) as FavoriteSession[]);
       } catch (err) {
         console.error('Favorites fetch error:', err);
+        reportError('즐겨찾기 모임 조회에 실패했습니다', err);
         setError('즐겨찾기한 모임을 불러올 수 없습니다');
         toast.error('즐겨찾기한 모임을 불러올 수 없습니다');
       } finally {

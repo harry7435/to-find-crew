@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import { reportError } from '@/lib/monitoring';
 
 export interface Player {
   id: string;
@@ -112,6 +113,8 @@ export function useGameManager() {
       }
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
+      // 저장 실패는 상태가 바뀔 때마다 나므로(용량 초과 등) 보고하지 않고, 손상된 데이터 로드 실패만 보고한다.
+      reportError('게임 매니저 로컬 데이터 로드에 실패했습니다', error);
       toast.error('저장된 데이터를 불러오는데 실패했습니다');
     } finally {
       setIsLoading(false);

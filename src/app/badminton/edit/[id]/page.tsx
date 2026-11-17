@@ -12,6 +12,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { recordApiFailure } from '@/lib/monitoring';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -63,7 +64,11 @@ export default function EditSessionPage() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const response = await fetch(`/api/badminton/sessions/${sessionId}`);
+      const response = await fetch(`/api/badminton/sessions/${sessionId}`).catch((error) => {
+        recordApiFailure('GET', `/api/badminton/sessions/${sessionId}`, 'network');
+        throw error;
+      });
+      if (!response.ok) recordApiFailure('GET', `/api/badminton/sessions/${sessionId}`, response.status);
       const result = await response.json();
 
       if (!response.ok) {
@@ -117,7 +122,11 @@ export default function EditSessionPage() {
         // 로컬 타임존 기준으로 해석해 UTC로 변환한 뒤 전송해야 서버(UTC)에 잘못
         // 저장되지 않는다.
         body: JSON.stringify({ ...data, session_date: new Date(data.session_date).toISOString() }),
+      }).catch((error) => {
+        recordApiFailure('PATCH', `/api/badminton/sessions/${sessionId}`, 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('PATCH', `/api/badminton/sessions/${sessionId}`, response.status);
 
       const result = await response.json();
 
@@ -152,7 +161,11 @@ export default function EditSessionPage() {
     try {
       const response = await fetch(`/api/badminton/sessions/${sessionId}`, {
         method: 'DELETE',
+      }).catch((error) => {
+        recordApiFailure('DELETE', `/api/badminton/sessions/${sessionId}`, 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('DELETE', `/api/badminton/sessions/${sessionId}`, response.status);
 
       const result = await response.json();
 

@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 
 export type MonitoringContext = Record<string, string | number | boolean | null | undefined>;
 
@@ -34,6 +35,46 @@ export function reportError(message: string, cause: unknown, context: Monitoring
       });
     }
     Sentry.captureException(new Error(message, { cause }));
+  });
+}
+
+/**
+ * 보고할 필요 없는 Supabase AuthError인지 확인한다.
+ * 4xx(잘못된 비밀번호, 만료된 OTP, 429 rate limit 등)는 사용자 탓, 네트워크 단절(AuthRetryableFetchError)은
+ * 불안정한 환경 탓이다. getSession()이 페이지마다 토큰을 갱신하므로 후자를 보고하면 Sentry가 넘친다.
+ * 5xx와 그 외 알 수 없는 오류만 보고 대상이다.
+ */
+export function isExpectedAuthError(error: unknown): boolean {
+  if (isAuthRetryableFetchError(error)) return true;
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' && status >= 400 && status < 500;
+}
+
+// StorageApiError(status: number)는 용량·형식 위반 등이 4xx다. 업로드는 드물게 직접 하는 동작이라
+// 네트워크 단절(status 없는 StorageUnknownError)은 일부러 보고 대상으로 둔다.
+export function isClientCausedStorageError(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' && status >= 400 && status < 500;
+}
+
+// 정적 세그먼트(소문자·하이픈)만 남기고, uuid·숫자·초대 코드(대문자) 등은 모두 :id로 바꾼다.
+function normalizeApiPath(path: string): string {
+  return path
+    .split('?')[0]
+    .split('/')
+    .map((segment) => (segment === '' || /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'))
+    .join('/');
+}
+
+/**
+ * 우리 API 라우트 호출 실패를 breadcrumb으로만 남긴다. 500은 서버가 보고하고 4xx는 정상 거절, 네트워크
+ * 실패는 불안정한 환경 탓이라 이벤트로는 보내지 않는다. 다른 이벤트의 맥락으로만 쓰인다.
+ */
+export function recordApiFailure(method: string, path: string, status: number | 'network'): void {
+  Sentry.addBreadcrumb({
+    category: 'api',
+    level: 'warning',
+    message: `${method} ${normalizeApiPath(path)} → ${status}`,
   });
 }
 

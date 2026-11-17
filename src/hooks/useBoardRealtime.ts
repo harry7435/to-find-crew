@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { createRealtimeStatusReporter, reportError } from '@/lib/monitoring';
+import { createRealtimeStatusReporter, recordApiFailure, reportError } from '@/lib/monitoring';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
 import {
@@ -280,8 +280,14 @@ export function useBoardRealtime(sessionId: string) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId, participant_id: id, participant_type: 'user' }),
         })
-          .then((response) => response.ok)
-          .catch(() => false);
+          .then((response) => {
+            if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/remove-participant', response.status);
+            return response.ok;
+          })
+          .catch(() => {
+            recordApiFailure('POST', '/api/badminton/sessions/remove-participant', 'network');
+            return false;
+          });
         if (!ok) {
           return fail('참가자 삭제에 실패했습니다');
         }

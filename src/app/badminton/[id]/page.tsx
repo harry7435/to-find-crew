@@ -17,7 +17,7 @@ import { ArrowLeft, Calendar, Eye, History, LogOut, MapPin, Copy, Share2, QrCode
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { createRealtimeStatusReporter } from '@/lib/monitoring';
+import { createRealtimeStatusReporter, recordApiFailure, reportError } from '@/lib/monitoring';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function SessionDetailPage() {
@@ -40,7 +40,11 @@ export default function SessionDetailPage() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const response = await fetch(`/api/badminton/sessions/${sessionId}`);
+      const response = await fetch(`/api/badminton/sessions/${sessionId}`).catch((error) => {
+        recordApiFailure('GET', `/api/badminton/sessions/${sessionId}`, 'network');
+        throw error;
+      });
+      if (!response.ok) recordApiFailure('GET', `/api/badminton/sessions/${sessionId}`, response.status);
       const result = await response.json();
 
       if (!response.ok) {
@@ -61,7 +65,15 @@ export default function SessionDetailPage() {
     if (!user) return;
 
     try {
-      const { data: profile } = await supabase.from('users').select('gender, skill_level').eq('id', user.id).single();
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('gender, skill_level')
+        .eq('id', user.id)
+        .single();
+      // 프로필 행이 없는 경우(PGRST116)는 모달로 안내하는 정상 흐름이라 보고하지 않는다.
+      if (error && error.code !== 'PGRST116') {
+        reportError('프로필 확인에 실패했습니다', error, { userId: user.id });
+      }
 
       // 프로필 정보가 없거나 불완전하면 모달 표시
       if (!profile || !profile.gender || !profile.skill_level) {
@@ -69,6 +81,7 @@ export default function SessionDetailPage() {
       }
     } catch (error) {
       console.error('Failed to check user profile:', error);
+      reportError('프로필 확인에 실패했습니다', error, { userId: user.id });
       // 프로필 확인 실패 시에도 모달 표시
       setShowUserInfoModal(true);
     }
@@ -158,6 +171,7 @@ export default function SessionDetailPage() {
       setShowUserInfoModal(false);
     } catch (error) {
       console.error('Profile update error:', error);
+      reportError('프로필 업데이트에 실패했습니다', error, { userId: user?.id });
       toast.error('프로필 업데이트에 실패했습니다', {
         description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
       });
@@ -182,7 +196,11 @@ export default function SessionDetailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId }),
+      }).catch((error) => {
+        recordApiFailure('POST', '/api/badminton/sessions/leave', 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/leave', response.status);
       const result = await response.json();
 
       if (!response.ok) {

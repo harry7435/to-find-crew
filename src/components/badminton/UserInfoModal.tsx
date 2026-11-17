@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/monitoring';
 
 const userInfoSchema = z.object({
   gender: z.enum(['male', 'female', 'other'], { message: '성별을 선택해주세요' }),
@@ -48,11 +49,15 @@ export default function UserInfoModal({ isOpen, onClose, onSubmit, isLoading = f
         } = await supabase.auth.getUser();
 
         if (user) {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('gender, skill_level')
             .eq('id', user.id)
             .single();
+          // 프로필 행이 아직 없는 경우(PGRST116)는 정상 흐름이다.
+          if (profileError && profileError.code !== 'PGRST116') {
+            reportError('사용자 프로필 불러오기에 실패했습니다', profileError, { userId: user.id });
+          }
 
           if (profile) {
             if (profile.gender) {
@@ -74,6 +79,7 @@ export default function UserInfoModal({ isOpen, onClose, onSubmit, isLoading = f
         }
       } catch (error) {
         console.error('Failed to load user profile:', error);
+        reportError('사용자 프로필 불러오기에 실패했습니다', error);
       } finally {
         setIsLoadingProfile(false);
       }

@@ -14,6 +14,20 @@
 - API routes don't throw either — they `console.error` and return 500, which `onRequestError`
   never sees. Every new `status: 500` branch needs a `reportError` call next to its
   `console.error`; 4xx branches don't get one.
+- Client-side failures (`console.error` breadcrumbs are dropped, so they'd otherwise leave no trace):
+  (A) a direct Supabase client call that fails (`{ error }` or throw) → `reportError` with a fixed
+  message and ids-only context. (B) a `fetch('/api/...')` to our own route → **never** `reportError`
+  (the server reports its 500s, 4xx are expected rejections, network failures are flaky gym networks);
+  call `recordApiFailure(method, path, status | 'network')`, which adds an `api` breadcrumb only, with
+  the path normalized (query stripped; any segment that isn't lowercase-hyphen words, i.e. uuid/number/
+  invite code, becomes `:id`). If one `catch` covers both a Supabase call and a fetch, split them so each
+  goes to its own path. (C) user-caused errors are not reported: auth 4xx and auth network failures (`isExpectedAuthError`:
+  wrong password, bad OTP, 429; `AuthRetryableFetchError` from flaky networks), Storage 4xx (`isClientCausedStorageError`), push permission
+  `NotAllowedError`, PostgREST `PGRST116` (no row for a bad/deleted id). (D) missing config
+  (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`) is reported. (E) `useGameManager` reports only the localStorage
+  *load* failure; save failures are not reported (they fire on every state change, so a quota error
+  would flood Sentry). Don't double-report: `isSessionOrganizer` reports its own query failure, and
+  `AuthContext` reports auth failures, so `/auth/login` doesn't.
 - Realtime `.subscribe()` callbacks use a per-channel `createRealtimeStatusReporter(source, context)`
   from `monitoring.ts`: create it in the same effect before `.subscribe`, call
   `reporter.onStatus(status, err)` in the callback, and call `reporter.dispose()` in cleanup before
