@@ -14,9 +14,18 @@
 - API routes don't throw either — they `console.error` and return 500, which `onRequestError`
   never sees. Every new `status: 500` branch needs a `reportError` call next to its
   `console.error`; 4xx branches don't get one.
-- Realtime `.subscribe()` callbacks call `reportRealtimeStatus(source, status, err, context)`;
-  it ignores non-failure statuses itself. Adding the call to `useBoardSpectator` is fine — it is
-  read-only reporting, not a shared write path (see `spectator-board-duplication.md`).
+- Realtime `.subscribe()` callbacks use a per-channel `createRealtimeStatusReporter(source, context)`
+  from `monitoring.ts`: create it in the same effect before `.subscribe`, call
+  `reporter.onStatus(status, err)` in the callback, and call `reporter.dispose()` in cleanup before
+  `removeChannel`. Why: a `CHANNEL_ERROR` without `err` (and `TIMED_OUT`) is a socket-level close from
+  a flaky network or backgrounded tab, which realtime-js auto-recovers from (and re-fires on every
+  failed reconnect), so reporting each one flooded Sentry. Those only add a `realtime` breadcrumb
+  (client `beforeBreadcrumb` drops only `console`, so they pass) and arm a 60s timer, cleared by
+  `SUBSCRIBED`; if it fires while `document.visibilityState === 'visible'` one `Realtime not recovered`
+  warning is sent (hidden tabs re-arm instead). `CHANNEL_ERROR` with `err` (server join rejection,
+  bindings mismatch — no auto-rejoin) is a real bug and reports immediately as `Realtime join failed`.
+  Each reporter reports at most once until the next `SUBSCRIBED`. Adding it to `useBoardSpectator` is
+  fine — it is read-only reporting, not a shared write path (see `spectator-board-duplication.md`).
 - Privacy relies on settings outside the code: all three inits set
   `dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false }`,
   `Sentry.setUser({ id })` only, and **Prevent Storing of IP Addresses** enabled in the Sentry

@@ -37,20 +37,77 @@ export function reportError(message: string, cause: unknown, context: Monitoring
   });
 }
 
-/** Realtime 구독 status 콜백에서 호출한다. 실패 status만 보고한다. */
-export function reportRealtimeStatus(
+// 소켓 단절은 라이브러리가 자동 재연결·재구독하므로, 이 시간 넘게 복구되지 않을 때만 보고한다.
+const REALTIME_RECOVERY_TIMEOUT_MS = 60_000;
+
+/**
+ * 채널 하나의 Realtime status를 추적하는 보고기. subscribe 전에 만들고 cleanup에서 dispose한다.
+ * err 없는 CHANNEL_ERROR/TIMED_OUT은 소켓 단절(백그라운드·불안정 네트워크)이라 자동 복구되므로
+ * breadcrumb만 남기고, 화면이 보이는 상태로 60초 넘게 복구되지 않을 때만 이벤트를 보낸다.
+ * err가 있으면 서버 거부·바인딩 불일치라 즉시 보고한다.
+ */
+export function createRealtimeStatusReporter(
   source: string,
-  status: string,
-  err: Error | undefined,
   context: MonitoringContext = {},
-): void {
-  if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return;
-  Sentry.withScope((scope) => {
-    applyContext(scope, context);
-    scope.setLevel('warning');
-    // 모바일 백그라운드 전환으로 반복되는 실패를 이슈 하나로 묶는다
-    scope.setFingerprint(['realtime', status, source]);
-    if (err) scope.setExtra('realtimeError', err.message);
-    Sentry.captureMessage(`Realtime ${status}: ${source}`);
-  });
+): { onStatus: (status: string, err: Error | undefined) => void; dispose: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let reported = false;
+  let disposed = false;
+  let lastStatus = '';
+
+  const clearTimer = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+
+  const arm = () => {
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (disposed || reported) return;
+      // 백그라운드 탭이 끊겨 있는 건 사용자 영향이 없으므로 보일 때까지 보고를 미룬다.
+      if (document.visibilityState !== 'visible') {
+        arm();
+        return;
+      }
+      reported = true;
+      Sentry.withScope((scope) => {
+        applyContext(scope, context);
+        scope.setLevel('warning');
+        scope.setFingerprint(['realtime', 'not-recovered', source]);
+        scope.setTag('lastStatus', lastStatus);
+        Sentry.captureMessage(`Realtime not recovered: ${source}`);
+      });
+    }, REALTIME_RECOVERY_TIMEOUT_MS);
+  };
+
+  return {
+    onStatus(status, err) {
+      if (disposed) return;
+      if (status === 'SUBSCRIBED') {
+        clearTimer();
+        reported = false;
+        return;
+      }
+      if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return;
+      if (status === 'CHANNEL_ERROR' && err) {
+        if (reported) return;
+        reported = true;
+        Sentry.withScope((scope) => {
+          applyContext(scope, context);
+          scope.setLevel('error');
+          scope.setFingerprint(['realtime', 'join-failed', source]);
+          scope.setExtra('realtimeError', err.message);
+          Sentry.captureMessage(`Realtime join failed: ${source}`);
+        });
+        return;
+      }
+      lastStatus = status;
+      Sentry.addBreadcrumb({ category: 'realtime', level: 'warning', message: `${status}: ${source}` });
+      if (timer === undefined && !reported) arm();
+    },
+    dispose() {
+      disposed = true;
+      clearTimer();
+    },
+  };
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { reportRealtimeStatus } from '@/lib/monitoring';
+import { createRealtimeStatusReporter } from '@/lib/monitoring';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
 import {
@@ -83,6 +83,7 @@ export function useBoardSpectator(sessionId: string) {
       if (!cancelled) setIsLoading(false);
     });
 
+    const reporter = createRealtimeStatusReporter('useBoardSpectator', { sessionId });
     const channel = supabase
       .channel(`board-spectator-${sessionId}`)
       .on(
@@ -121,7 +122,7 @@ export function useBoardSpectator(sessionId: string) {
         () => loadSnapshot(),
       )
       .subscribe((status, err) => {
-        reportRealtimeStatus('useBoardSpectator', status, err, { sessionId });
+        reporter.onStatus(status, err);
         if (status === 'SUBSCRIBED') {
           loadSnapshot();
         }
@@ -139,6 +140,7 @@ export function useBoardSpectator(sessionId: string) {
       cancelled = true;
       document.removeEventListener('visibilitychange', refreshOnReturn);
       window.removeEventListener('online', refreshOnReturn);
+      reporter.dispose();
       supabase.removeChannel(channel);
     };
   }, [sessionId, loadSnapshot]);

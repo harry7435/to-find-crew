@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { reportError, reportRealtimeStatus } from '@/lib/monitoring';
+import { createRealtimeStatusReporter, reportError } from '@/lib/monitoring';
 import type { Player, GameRecord, Court, QueueItem } from '@/hooks/useGameManager';
 import type { CourtRow, BoardGameRow, BoardPlayerStateRow } from '@/types/badminton';
 import {
@@ -151,6 +151,7 @@ export function useBoardRealtime(sessionId: string) {
       if (!cancelled) setIsLoading(false);
     });
 
+    const reporter = createRealtimeStatusReporter('useBoardRealtime', { sessionId });
     const channel = supabase
       .channel(`board-${sessionId}`)
       .on(
@@ -189,7 +190,7 @@ export function useBoardRealtime(sessionId: string) {
         () => loadSnapshot(),
       )
       .subscribe((status, err) => {
-        reportRealtimeStatus('useBoardRealtime', status, err, { sessionId });
+        reporter.onStatus(status, err);
         // 최초 연결뿐 아니라 네트워크 재연결로 재구독될 때도 전체 스냅샷을 다시 받아
         // 끊긴 동안 놓쳤을 수 있는 변경사항과 정합성을 맞춘다
         if (status === 'SUBSCRIBED') {
@@ -209,6 +210,7 @@ export function useBoardRealtime(sessionId: string) {
       cancelled = true;
       document.removeEventListener('visibilitychange', refreshOnReturn);
       window.removeEventListener('online', refreshOnReturn);
+      reporter.dispose();
       supabase.removeChannel(channel);
     };
   }, [sessionId, loadSnapshot]);

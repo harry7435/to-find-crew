@@ -17,7 +17,7 @@ import { ArrowLeft, Calendar, Eye, History, LogOut, MapPin, Copy, Share2, QrCode
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { reportRealtimeStatus } from '@/lib/monitoring';
+import { createRealtimeStatusReporter } from '@/lib/monitoring';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function SessionDetailPage() {
@@ -81,6 +81,7 @@ export default function SessionDetailPage() {
 
   // 참가자 목록 실시간 반영 (다른 브라우저에서 참가/게스트 등록/퇴장 시 자동 새로고침)
   useEffect(() => {
+    const reporter = createRealtimeStatusReporter('badminton-session-page', { sessionId });
     const channel = supabase
       .channel(`session-participants-${sessionId}`)
       .on(
@@ -99,7 +100,7 @@ export default function SessionDetailPage() {
         () => fetchSession(),
       )
       .subscribe((status, err) => {
-        reportRealtimeStatus('badminton-session-page', status, err, { sessionId });
+        reporter.onStatus(status, err);
       });
 
     // 모바일(특히 PWA)은 백그라운드로 가면 소켓이 멈추거나 끊기고, 그동안의 이벤트는 다시 오지 않는다.
@@ -113,6 +114,7 @@ export default function SessionDetailPage() {
     return () => {
       document.removeEventListener('visibilitychange', refreshOnReturn);
       window.removeEventListener('online', refreshOnReturn);
+      reporter.dispose();
       supabase.removeChannel(channel);
     };
   }, [sessionId, fetchSession]);
