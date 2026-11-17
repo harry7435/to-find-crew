@@ -14,9 +14,32 @@
 - API routes don't throw either — they `console.error` and return 500, which `onRequestError`
   never sees. Every new `status: 500` branch needs a `reportError` call next to its
   `console.error`; 4xx branches don't get one.
-- Realtime `.subscribe()` callbacks call `reportRealtimeStatus(source, status, err, context)`;
-  it ignores non-failure statuses itself. Adding the call to `useBoardSpectator` is fine — it is
-  read-only reporting, not a shared write path (see `spectator-board-duplication.md`).
+- Client-side failures (`console.error` breadcrumbs are dropped, so they'd otherwise leave no trace):
+  (A) a direct Supabase client call that fails (`{ error }` or throw) → `reportError` with a fixed
+  message and ids-only context. (B) a `fetch('/api/...')` to our own route → **never** `reportError`
+  (the server reports its 500s, 4xx are expected rejections, network failures are flaky gym networks);
+  call `recordApiFailure(method, path, status | 'network')`, which adds an `api` breadcrumb only, with
+  the path normalized (query stripped; any segment that isn't lowercase-hyphen words, i.e. uuid/number/
+  invite code, becomes `:id`). If one `catch` covers both a Supabase call and a fetch, split them so each
+  goes to its own path. (C) user-caused errors are not reported: auth 4xx and auth network failures (`isExpectedAuthError`:
+  wrong password, bad OTP, 429; `AuthRetryableFetchError` from flaky networks), Storage 4xx (`isClientCausedStorageError`), push permission
+  `NotAllowedError`, PostgREST `PGRST116` (no row for a bad/deleted id). (D) missing config
+  (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`) is reported. (E) `useGameManager` reports only the localStorage
+  *load* failure; save failures are not reported (they fire on every state change, so a quota error
+  would flood Sentry). Don't double-report: `isSessionOrganizer` reports its own query failure, and
+  `AuthContext` reports auth failures, so `/auth/login` doesn't.
+- Realtime `.subscribe()` callbacks use a per-channel `createRealtimeStatusReporter(source, context)`
+  from `monitoring.ts`: create it in the same effect before `.subscribe`, call
+  `reporter.onStatus(status, err)` in the callback, and call `reporter.dispose()` in cleanup before
+  `removeChannel`. Why: a `CHANNEL_ERROR` without `err` (and `TIMED_OUT`) is a socket-level close from
+  a flaky network or backgrounded tab, which realtime-js auto-recovers from (and re-fires on every
+  failed reconnect), so reporting each one flooded Sentry. Those only add a `realtime` breadcrumb
+  (client `beforeBreadcrumb` drops only `console`, so they pass) and arm a 60s timer, cleared by
+  `SUBSCRIBED`; if it fires while `document.visibilityState === 'visible'` one `Realtime not recovered`
+  warning is sent (hidden tabs re-arm instead). `CHANNEL_ERROR` with `err` (server join rejection,
+  bindings mismatch — no auto-rejoin) is a real bug and reports immediately as `Realtime join failed`.
+  Each reporter reports at most once until the next `SUBSCRIBED`. Adding it to `useBoardSpectator` is
+  fine — it is read-only reporting, not a shared write path (see `spectator-board-duplication.md`).
 - Privacy relies on settings outside the code: all three inits set
   `dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false }`,
   `Sentry.setUser({ id })` only, and **Prevent Storing of IP Addresses** enabled in the Sentry

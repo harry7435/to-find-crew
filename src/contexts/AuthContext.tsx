@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { User } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
 import { supabase } from '@/lib/supabase';
+import { isExpectedAuthError, reportError } from '@/lib/monitoring';
 
 // users 테이블에 저장된 표시 정보. 소셜 계정 메타데이터(user.user_metadata)는 로그인 시점 값이라
 // 프로필 페이지에서 바꾼 이름·사진을 반영하지 못하므로, 화면 표시는 이 값을 우선한다.
@@ -107,10 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
+        if (error && !isExpectedAuthError(error)) reportError('세션 확인에 실패했습니다', error);
         setUser(session?.user ?? null);
       } catch (error) {
         console.error('Session error:', error);
+        if (!isExpectedAuthError(error)) reportError('세션 확인에 실패했습니다', error);
       } finally {
         setLoading(false);
       }
@@ -141,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
     } catch (error) {
       console.error('Sign in error:', error);
+      if (!isExpectedAuthError(error)) reportError('카카오 로그인 시작에 실패했습니다', error);
       throw error;
     } finally {
       setLoading(false);
@@ -159,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
     } catch (error) {
       console.error('Email sign in error:', error);
+      if (!isExpectedAuthError(error)) reportError('이메일 로그인 링크 전송에 실패했습니다', error);
       throw error;
     } finally {
       setLoading(false);
@@ -172,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
     } catch (error) {
       console.error('Password sign in error:', error);
+      if (!isExpectedAuthError(error)) reportError('비밀번호 로그인에 실패했습니다', error);
       throw error;
     } finally {
       setLoading(false);
@@ -185,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
     } catch (error) {
       console.error('Sign out error:', error);
+      if (!isExpectedAuthError(error)) reportError('로그아웃에 실패했습니다', error);
       throw error;
     } finally {
       setLoading(false);

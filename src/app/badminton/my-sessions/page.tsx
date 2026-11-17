@@ -8,6 +8,7 @@ import AuthGuard from '@/components/auth/AuthGuard';
 import { ArrowLeft, Calendar, MapPin, Users, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { recordApiFailure } from '@/lib/monitoring';
 
 interface Session {
   id: string;
@@ -31,7 +32,11 @@ export default function MySessionsPage() {
   useEffect(() => {
     const fetchMySessions = async () => {
       try {
-        const response = await fetch('/api/badminton/sessions/my-sessions');
+        const response = await fetch('/api/badminton/sessions/my-sessions').catch((error) => {
+          recordApiFailure('GET', '/api/badminton/sessions/my-sessions', 'network');
+          throw error;
+        });
+        if (!response.ok) recordApiFailure('GET', '/api/badminton/sessions/my-sessions', response.status);
         const result = await response.json();
 
         if (!response.ok) {

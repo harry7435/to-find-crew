@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { recordApiFailure, reportError } from '@/lib/monitoring';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +49,11 @@ export default function MigrateModal({ isOpen, onClose, players }: MigrateModalP
           max_participants: 20,
           court_count: 1,
         }),
+      }).catch((error) => {
+        recordApiFailure('POST', '/api/badminton/sessions', 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions', response.status);
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || '세션 생성에 실패했습니다');
@@ -67,6 +72,7 @@ export default function MigrateModal({ isOpen, onClose, players }: MigrateModalP
 
         const { error: insertError } = await supabase.from('guest_participants').insert(inserts);
         if (insertError) {
+          reportError('로컬 선수 명단 서버 복사에 실패했습니다', insertError, { sessionId });
           throw new Error('선수 명단 복사에 실패했습니다');
         }
       }

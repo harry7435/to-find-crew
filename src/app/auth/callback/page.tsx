@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { isExpectedAuthError, reportError } from '@/lib/monitoring';
 import { MIGRATION_PENDING_FLAG } from '@/utils/gameManagerMigration';
 
 export default function AuthCallbackPage() {
@@ -45,6 +46,7 @@ export default function AuthCallbackPage() {
 
           if (upsertError) {
             console.error('User upsert error:', upsertError);
+            reportError('로그인 후 사용자 행 생성에 실패했습니다', upsertError, { userId: user.id });
           }
 
           // 성공적으로 로그인됨 - game-manager 마이그레이션 대기 중이면 그쪽으로, 아니면 홈으로
@@ -60,6 +62,7 @@ export default function AuthCallbackPage() {
         }
       } catch (error) {
         console.error('Auth callback error:', error);
+        if (!isExpectedAuthError(error)) reportError('로그인 콜백 처리에 실패했습니다', error);
         setError(error instanceof Error ? error.message : '로그인 처리 중 오류가 발생했습니다');
       }
     };

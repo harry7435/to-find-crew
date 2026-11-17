@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server';
+import { reportError } from '@/lib/monitoring';
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createServerClient>>;
 
@@ -26,6 +27,8 @@ export async function isSessionOrganizer(
 
   if (error) {
     console.error('isSessionOrganizer check error:', error);
+    // 호출부는 false만 받아 403으로 응답하므로 여기서만 보고한다.
+    reportError('[api] 운영진 여부 확인에 실패했습니다', error, { sessionId });
     return false;
   }
 

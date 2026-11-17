@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { recordApiFailure, reportError } from '@/lib/monitoring';
 import { BadmintonSession } from '@/types/badminton';
 import { Calendar, MapPin, Users, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -49,6 +50,10 @@ export default function InvitePage() {
           .eq('access_code', accessCode.toUpperCase())
           .single();
 
+        // 존재하지 않는 코드(PGRST116)는 사용자 입력 탓이라 보고하지 않는다. 코드 자체는 context에 싣지 않는다.
+        if (error && error.code !== 'PGRST116') {
+          reportError('초대 코드로 모임 조회에 실패했습니다', error);
+        }
         if (error || !data) {
           throw new Error('Invalid access code');
         }
@@ -87,7 +92,11 @@ export default function InvitePage() {
           ...guestInfo,
           skill_level: parseInt(guestInfo.skill_level),
         }),
+      }).catch((error) => {
+        recordApiFailure('POST', '/api/badminton/sessions/join-guest', 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/join-guest', response.status);
 
       const result = await response.json();
 
@@ -122,7 +131,11 @@ export default function InvitePage() {
         body: JSON.stringify({
           access_code: accessCode.toUpperCase(),
         }),
+      }).catch((error) => {
+        recordApiFailure('POST', '/api/badminton/sessions/join', 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/join', response.status);
 
       const result = await response.json();
 

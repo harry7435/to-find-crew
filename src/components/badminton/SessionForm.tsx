@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
+import { recordApiFailure } from '@/lib/monitoring';
 
 const sessionSchema = z.object({
   name: z.string().min(2, '번개 모임 이름은 최소 2자 이상이어야 합니다'),
@@ -53,7 +54,11 @@ export default function SessionForm({ onSuccess }: SessionFormProps) {
         // 로컬 타임존 기준으로 해석해 UTC로 변환한 뒤 전송해야 서버(UTC)에 잘못
         // 저장되지 않는다.
         body: JSON.stringify({ ...data, session_date: new Date(data.session_date).toISOString() }),
+      }).catch((error) => {
+        recordApiFailure('POST', '/api/badminton/sessions', 'network');
+        throw error;
       });
+      if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions', response.status);
 
       const result = await response.json();
 

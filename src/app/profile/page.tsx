@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { isClientCausedStorageError, reportError } from '@/lib/monitoring';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -120,6 +121,7 @@ export default function ProfilePage() {
         setValue('phone', data.phone || '');
       } catch (error) {
         console.error('Profile fetch error:', error);
+        reportError('프로필 조회에 실패했습니다', error);
         toast.error('프로필을 불러올 수 없습니다');
       } finally {
         setIsLoading(false);
@@ -162,6 +164,7 @@ export default function ProfilePage() {
       router.push('/');
     } catch (error) {
       console.error('Profile update error:', error);
+      reportError('프로필 저장에 실패했습니다', error, { profileId: profile.id });
       toast.error('프로필 업데이트에 실패했습니다', {
         description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
       });
@@ -221,6 +224,10 @@ export default function ProfilePage() {
       toast.success('프로필 이미지가 업데이트되었습니다!');
     } catch (error) {
       console.error('Image upload error:', error);
+      // 용량·형식 등 클라이언트 탓 업로드 오류(StorageApiError 4xx)는 보고하지 않는다.
+      if (!isClientCausedStorageError(error)) {
+        reportError('프로필 이미지 업로드에 실패했습니다', error, { profileId: profile.id });
+      }
       toast.error('이미지 업로드에 실패했습니다', {
         description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다',
       });

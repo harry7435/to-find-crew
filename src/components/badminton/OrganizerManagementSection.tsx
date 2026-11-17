@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/monitoring';
 import { toast } from 'sonner';
 import { SessionOrganizer, SessionParticipant } from '@/types/badminton';
 
@@ -49,6 +50,7 @@ export default function OrganizerManagementSection({
       onOrganizersChanged();
     } catch (error) {
       console.error('Add organizer error:', error);
+      reportError('운영진 지정에 실패했습니다', error, { sessionId });
       toast.error('운영진 지정에 실패했습니다');
     } finally {
       setIsSubmitting(false);
@@ -70,6 +72,7 @@ export default function OrganizerManagementSection({
       onOrganizersChanged();
     } catch (error) {
       console.error('Remove organizer error:', error);
+      reportError('운영진 해제에 실패했습니다', error, { sessionId });
       toast.error('운영진 해제에 실패했습니다');
     } finally {
       setIsSubmitting(false);
