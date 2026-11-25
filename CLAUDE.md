@@ -196,7 +196,8 @@
   independent color channels (gender vs. team side), `waiting_since` reset rules around
   `enqueueGame`, and the write-failure contract of `useBoardRealtime` (writes return
   `Promise<boolean>`, multi-step writes keep a recoverable order), and the `playing` > `queued` >
-  `active` status priority for queuing a playing player. See
+  `active` status priority (derived from `board_games` in `buildSnapshot`, not stored status) for
+  queuing a playing player. See
   `docs/gotchas/game-manager-board-conventions.md` before "simplifying" any of `CustomTeamPicker.tsx`,
   `TeamCourtBox.tsx`, either hook's `enqueueGame()`, or reordering `useBoardRealtime` writes.
 

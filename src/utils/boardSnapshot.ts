@@ -60,6 +60,15 @@ function toPlayer(
   };
 }
 
+// 저장된 player_status는 여러 운영진의 동시 쓰기로 board_games와 어긋날 수 있다(큐에 없는데 queued 등).
+// 게임 행이 진실이므로 playing > queued는 board_games에서 계산하고, 그 외에는 저장값을 쓴다.
+// 게임이 받쳐주지 않는 저장된 playing/queued는 stale이므로 active로 되돌린다.
+function deriveStatus(player: Player, playingIds: Set<string>, queuedIds: Set<string>): Player['status'] {
+  if (playingIds.has(player.id)) return 'playing';
+  if (queuedIds.has(player.id)) return 'queued';
+  return player.status === 'playing' || player.status === 'queued' ? 'active' : player.status;
+}
+
 export interface BoardSnapshotInput {
   participants: RawSessionParticipant[];
   guests: RawGuestParticipant[];
@@ -108,6 +117,14 @@ export function buildSnapshot({
     ...guests.map((g) => toPlayer(g.id, 'guest', g, stateByGp.get(g.id))),
   ];
 
+  const playingIds = new Set<string>();
+  const queuedIds = new Set<string>();
+  for (const g of gameRows) {
+    if (g.status === 'playing') g.player_ids.forEach((id) => playingIds.add(id));
+    else if (g.status === 'queued') g.player_ids.forEach((id) => queuedIds.add(id));
+  }
+  const derivedPlayers = players.map((p) => ({ ...p, status: deriveStatus(p, playingIds, queuedIds) }));
+
   const courts: Court[] = courtRows.map((c) => {
     const activeGame = gameRows.find((g) => g.court_id === c.id && g.status === 'playing');
     return {
@@ -127,5 +144,5 @@ export function buildSnapshot({
     .filter((g) => g.status === 'completed')
     .map((g) => ({ id: g.id, players: g.player_ids, confirmedAt: g.completed_at! }));
 
-  return { players, courts, queue, games };
+  return { players: derivedPlayers, courts, queue, games };
 }

@@ -75,13 +75,24 @@ export async function POST(request: NextRequest) {
 
     // 게임 중이거나 대기열에 있는 참가자가 빠지면 진행 중인 게임에 "알 수 없음" 선수가 남는다.
     // 게임이 끝나거나 대기열에서 빠진 뒤에만 취소할 수 있게 한다.
-    const { data: boardState } = await supabase
-      .from('board_player_state')
-      .select('player_status')
-      .eq('session_participant_id', participant.id)
-      .maybeSingle();
+    // 저장된 player_status는 동시 조작으로 어긋날 수 있어, 실제 게임(board_games) 기준으로 판단한다.
+    const { data: activeGames, error: activeGamesError } = await supabase
+      .from('board_games')
+      .select('id')
+      .eq('session_id', body.session_id)
+      .in('status', ['queued', 'playing'])
+      .contains('player_ids', [participant.id])
+      .limit(1);
 
-    if (boardState?.player_status === 'playing' || boardState?.player_status === 'queued') {
+    if (activeGamesError) {
+      reportError('[api] POST /api/badminton/sessions/leave: Failed to check active games', activeGamesError, {
+        route: '/api/badminton/sessions/leave',
+        sessionId: body.session_id,
+      });
+      return NextResponse.json({ error: 'Failed to check game status' }, { status: 500 });
+    }
+
+    if (activeGames && activeGames.length > 0) {
       return NextResponse.json({ error: ERROR_MESSAGES.IN_GAME, code: 'IN_GAME' }, { status: 400 });
     }
 
