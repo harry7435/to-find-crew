@@ -53,6 +53,23 @@
   court object, and there is no column on `courts`/`board_games` to stash it — closing the gap needs
   a schema decision (additive-only convention applies). Don't "align" the two by copying the
   `nowIso` behaviour into `useGameManager.ts`.
+- **Player status priority is `playing` > `queued` > `active`, and "게임중 + 다음 대기" is stored as
+  `playing`.** An organizer can queue a currently-playing player into ONE upcoming game (invariant:
+  at most 1 court + 1 queued game per player — keeps status derivation a simple priority and the
+  demand is rare). The "다음 대기" badge/notice is derived by looking the player up in the queued
+  games, not from a status value. So `endCourtGame`/`cancelCourtGame`/`removeFromQueue`/`enqueueGame`
+  must **not** blindly overwrite with `active`/`queued`: each looks at the player's *other* game
+  (`endCourtGame`: queued elsewhere → `queued`, else `active`; `enqueueGame` leaves `playing` players
+  as `playing`). Simplifying to an unconditional write puts a player on two courts or loses their
+  queued slot, with no error. `useBoardRealtime` reads the other games from the DB right before
+  writing (`fetchBusyPlayers`, not the local snapshot, so another organizer's change is seen);
+  `useGameManager` derives it from in-memory state. The two are an intentional pair — change both.
+  **Accepted races (no DB function yet):** two organizers queuing the same playing player into
+  different games can break the 1+1 invariant, and an `endCourtGame` whose busy-read lands just
+  before another organizer's enqueue insert can set that player to `active` while they sit in a
+  queued game — status stays wrong until that game is assigned or cancelled. The game-level invariant
+  still holds because `enqueueGame` checks `board_games`, not stored status, and the court-assignment
+  guard blocks double-booking.
 - **`useBoardRealtime.ts`'s multi-step writes are ordered so a mid-sequence failure is recoverable by
   pressing the same button again — don't reorder them.** Each board action touches one `board_games`
   row plus up to four `board_player_state` rows as separate requests (no transaction), so a network
