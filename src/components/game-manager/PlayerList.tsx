@@ -17,6 +17,7 @@ import {
   MoreVertical,
   CheckCircle2,
   UserPlus,
+  Users,
 } from 'lucide-react';
 import { formatElapsed } from '@/utils/formatElapsed';
 import { useTicker } from '@/hooks/useTicker';
@@ -38,6 +39,8 @@ interface PlayerListProps {
   onTogglePinned: (id: string) => void;
   onToggleAttending: (id: string) => void;
   onOpenAttendancePicker: () => void;
+  /** 인원 관리 모달 진입점. 없으면(체험판) 버튼을 숨긴다. */
+  onOpenRosterManage?: () => void;
   /** 등록된 선수가 0명일 때 빈 상태에서 등록 진입점을 연다. 보드와 체험판 모두 등록 모달. */
   onAddPlayerClick: () => void;
   filter: AttendanceFilter;
@@ -87,6 +90,7 @@ export default function PlayerList({
   onTogglePinned,
   onToggleAttending,
   onOpenAttendancePicker,
+  onOpenRosterManage,
   onAddPlayerClick,
   filter,
   onFilterChange,
@@ -165,6 +169,12 @@ export default function PlayerList({
           <ListChecks className="h-3.5 w-3.5 mr-1" />
           오늘 참석자 선택
         </Button>
+        {onOpenRosterManage && (
+          <Button size="sm" variant="outline" onClick={onOpenRosterManage} className="text-xs">
+            <Users className="h-3.5 w-3.5 mr-1" />
+            인원 관리
+          </Button>
+        )}
       </div>
 
       <div className="shrink-0 flex flex-wrap items-center gap-2 text-xs">

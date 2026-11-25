@@ -445,15 +445,6 @@ export function useBoardRealtime(sessionId: string) {
     [loadSnapshot, fail],
   );
 
-  const resetPlayers = useCallback(async (): Promise<boolean> => {
-    const { error } = await supabase.from('guest_participants').delete().eq('session_id', sessionId);
-    if (error) {
-      return fail('로그인하지 않은 선수 삭제에 실패했습니다', error);
-    }
-    await loadSnapshot();
-    return true;
-  }, [sessionId, loadSnapshot, fail]);
-
   // 1회성 게스트 중 게임중/대기열에 있는 사람은 남긴다. 바쁜 사람은 스냅샷이 아니라 board_games에서
   // 삭제 직전에 다시 조회한다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
   const removeOneTimeGuests = useCallback(async (): Promise<{ removedIds: string[]; skipped: number } | null> => {
@@ -804,7 +795,6 @@ export function useBoardRealtime(sessionId: string) {
     setAttending,
     setAttendingBulk,
     removeGame,
-    resetPlayers,
     removeOneTimeGuests,
     resetWaitingTimes,
     resetGames,

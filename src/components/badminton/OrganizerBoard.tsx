@@ -13,6 +13,7 @@ import { Player } from '@/hooks/useGameManager';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerAddModal from '@/components/game-manager/PlayerAddModal';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
+import RosterManageModal from '@/components/badminton/RosterManageModal';
 import AttendancePickerModal from '@/components/game-manager/AttendancePickerModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
 import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
@@ -48,7 +49,6 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     setAttending,
     setAttendingBulk,
     removeGame,
-    resetPlayers,
     removeOneTimeGuests,
     resetWaitingTimes,
     resetGames,
@@ -73,6 +73,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
+  const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<'pool' | 'pick'>('pool');
   // 모바일 전용 하단 탭. 인원/팀뽑기는 왼쪽 카드의 leftTab과 같은 화면이라 서로 맞춘다.
   const [mobileTab, setMobileTab] = useState<MobileSection>('players');
@@ -444,25 +445,17 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     }
   }, [games.length, resetGames, resetWaitingTimes, confirm]);
 
-  const handleResetPlayers = useCallback(async () => {
-    if (players.length === 0) {
-      toast.error('삭제할 선수가 없습니다');
-      return;
-    }
-    if (
-      await confirm({
-        title: '로그인하지 않은 선수 전원을 삭제하시겠습니까?',
-        description: '로그인 참가자는 유지됩니다',
-        confirmText: '삭제',
-        variant: 'destructive',
-      })
-    ) {
-      setPickedPlayers(null);
-      if (await resetPlayers()) {
-        toast.success('로그인하지 않은 선수를 모두 삭제했습니다');
+  const handleToggleOneTime = useCallback(
+    async (id: string) => {
+      const player = players.find((p) => p.id === id);
+      if (!player || player.participantType === 'user') return;
+      const next = !player.isOneTime;
+      if (await updatePlayer(id, { isOneTime: next })) {
+        toast.success(`${player.name} 선수를 ${next ? '1회성' : '고정'} 게스트로 바꿨습니다`);
       }
-    }
-  }, [players.length, resetPlayers, confirm]);
+    },
+    [players, updatePlayer],
+  );
 
   const oneTimeCount = players.filter((p) => p.isOneTime).length;
 
@@ -632,6 +625,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onTogglePinned={handleTogglePinned}
                 onToggleAttending={handleToggleAttending}
                 onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
+                onOpenRosterManage={() => setIsRosterOpen(true)}
                 onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
@@ -771,12 +765,6 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
               <Button onClick={handleResetGames} variant="outline" size="sm">
                 게임 기록 초기화
               </Button>
-              <Button onClick={handleRemoveOneTimeGuests} variant="destructive" size="sm">
-                1회성 게스트 삭제 ({oneTimeCount}명)
-              </Button>
-              <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                로그인 안 한 선수 전체 삭제
-              </Button>
             </div>
           </div>
         </SheetContent>
@@ -788,6 +776,19 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         onClose={() => setEditingPlayer(null)}
         onUpdate={handleUpdatePlayer}
         showOneTime
+      />
+
+      {/* 수정·등록 모달이 열려 있는 동안은 인원 관리 모달을 숨긴다(상태는 유지). 같은 z-50 다이얼로그를
+          겹치면 Radix 포커스 트랩이 서로 싸울 수 있어, 닫고 여는 대신 한 번에 하나만 보이게 한다. */}
+      <RosterManageModal
+        isOpen={isRosterOpen && editingPlayer === null && !isAddPlayerModalOpen}
+        onClose={() => setIsRosterOpen(false)}
+        players={players}
+        onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
+        onEditPlayer={handleEditPlayer}
+        onRemovePlayer={handleRemovePlayer}
+        onToggleOneTime={handleToggleOneTime}
+        onRemoveOneTimeGuests={handleRemoveOneTimeGuests}
       />
 
       <AttendancePickerModal
