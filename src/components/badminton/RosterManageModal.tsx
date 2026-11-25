@@ -23,8 +23,8 @@ interface RosterManageModalProps {
   onEditPlayer: (player: Player) => void;
   onRemovePlayer: (id: string) => void;
   onToggleOneTime: (id: string) => void;
-  /** 선택한 id를 삭제한다. true면 모달의 선택을 비운다. */
-  onRemoveSelected: (ids: string[]) => Promise<boolean>;
+  // 선택에서 뺄 id 목록을 반환한다 (실패한 id는 재시도할 수 있게 남긴다).
+  onRemoveSelected: (ids: string[]) => Promise<string[]>;
 }
 
 const FILTERS: { key: RosterFilter; label: string }[] = [
@@ -153,7 +153,8 @@ export default function RosterManageModal({
     if (isRemoving || selected.size === 0) return;
     setIsRemoving(true);
     try {
-      if (await onRemoveSelected([...selected])) setSelected(new Set());
+      const done = new Set(await onRemoveSelected([...selected]));
+      if (done.size > 0) setSelected((prev) => new Set([...prev].filter((id) => !done.has(id))));
     } finally {
       setIsRemoving(false);
     }
@@ -191,7 +192,7 @@ export default function RosterManageModal({
               ref={(el) => {
                 if (el) el.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
               }}
-              disabled={selectableVisible.length === 0}
+              disabled={selectableVisible.length === 0 || isRemoving}
               onChange={toggleAllVisible}
               className="h-3.5 w-3.5"
             />
@@ -212,7 +213,7 @@ export default function RosterManageModal({
                   <input
                     type="checkbox"
                     checked={selected.has(p.id)}
-                    disabled={busy}
+                    disabled={busy || isRemoving}
                     onChange={() => toggleOne(p.id)}
                     aria-label={`${p.name} 선택`}
                     className="h-3.5 w-3.5 shrink-0"

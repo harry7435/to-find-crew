@@ -48,12 +48,13 @@ export async function POST(request: NextRequest) {
         .delete()
         .eq('id', participant_id)
         .select('user_id')
-        .single();
+        .maybeSingle();
 
       if (deleteError) {
         throw deleteError;
       }
 
+      // 이미 지워진 행이면 멱등 성공으로 처리한다 (정리할 user_id 없음)
       // 강퇴된 사람이 운영진이었다면 "유령 운영진"으로 남지 않도록 자격도 함께 정리한다
       if (deletedParticipant) {
         const { error: organizerCleanupError } = await supabase

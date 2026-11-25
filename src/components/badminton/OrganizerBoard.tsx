@@ -457,10 +457,10 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     [players, updatePlayer],
   );
 
-  // 인원 관리 모달에서 체크한 선수들을 삭제한다. 모달의 선택을 비워도 되면 true.
+  // 인원 관리 모달에서 체크한 선수들을 삭제한다. 모달 선택에서 뺄 id(삭제됨 + 게임중·대기중으로 제외됨)를 반환한다. 취소/실패는 빈 배열.
   const handleRemoveSelected = useCallback(
-    async (ids: string[]): Promise<boolean> => {
-      if (ids.length === 0) return false;
+    async (ids: string[]): Promise<string[]> => {
+      if (ids.length === 0) return [];
       const userCount = players.filter((p) => ids.includes(p.id) && p.participantType === 'user').length;
       const busyNote = '게임중이거나 대기열에 있는 사람은 제외됩니다';
       if (
@@ -471,10 +471,10 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
           variant: 'destructive',
         }))
       ) {
-        return false;
+        return [];
       }
       const result = await removePlayers(ids);
-      if (!result) return false;
+      if (!result) return [];
       const { removedIds, skippedBusy, failedIds } = result;
       removedIds.forEach((id) => removeReady(id));
       // 뽑힌 팀·직접 고르기에 실제로 삭제된 사람이 있을 때만 초기화한다.
@@ -482,14 +482,14 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
       setSelectedPlayers((prev) =>
         prev.some((p) => removedIds.includes(p.id)) ? prev.filter((p) => !removedIds.includes(p.id)) : prev,
       );
-      if (removedIds.length > 0 || failedIds.length === 0) {
-        toast.success(
-          `${removedIds.length}명을 삭제했습니다` +
-            (skippedBusy.length > 0 ? `, 게임중·대기중 ${skippedBusy.length}명은 남겨 두었습니다` : ''),
-        );
+      const skippedNote = skippedBusy.length > 0 ? `게임중·대기중이라 ${skippedBusy.length}명을 남겨 두었습니다` : '';
+      if (removedIds.length > 0) {
+        toast.success(`${removedIds.length}명을 삭제했습니다` + (skippedNote ? `, ${skippedNote}` : ''));
+      } else if (failedIds.length === 0) {
+        toast('삭제된 사람이 없습니다' + (skippedNote ? `. ${skippedNote}` : ''));
       }
       if (failedIds.length > 0) toast.error(`${failedIds.length}명은 삭제하지 못했습니다. 다시 시도해주세요`);
-      return true;
+      return [...removedIds, ...skippedBusy];
     },
     [players, confirm, removePlayers, removeReady],
   );
