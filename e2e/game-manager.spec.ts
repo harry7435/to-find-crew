@@ -225,8 +225,10 @@ test.describe('게임중 선수를 다음 대기열에', () => {
     // 게임중이면서 대기 중인 선수는 게임중으로만 센다
     await expect(page.getByText(/게임중\s*4명/)).toBeVisible();
     await expect(page.getByText(/대기열\s*3명/)).toBeVisible();
+    await expect(page.getByText('다음 대기', { exact: true }).filter({ visible: true })).toHaveCount(1);
 
     await gotoTab(page, testInfo, '대기');
+    await expect(page.getByText(/^게임중: .+ · 끝나면 배정할 수 있어요$/).filter({ visible: true })).toHaveCount(1);
     const assignToCourt2 = page.getByRole('button', { name: /코트 2/ }).filter({ visible: true });
     await assignToCourt2.first().click();
     await expect(page.getByText(/님이 아직 게임중입니다$/)).toBeVisible();
@@ -240,8 +242,10 @@ test.describe('게임중 선수를 다음 대기열에', () => {
     await gotoTab(page, testInfo, '인원');
     // 코트 1 게임이 끝나도 대기열에 있는 그 선수는 대기열로 남는다
     await expect(page.getByText(/대기열\s*4명/)).toBeVisible();
+    await expect(page.getByText('다음 대기', { exact: true }).filter({ visible: true })).toHaveCount(0);
 
     await gotoTab(page, testInfo, '대기');
+    await expect(page.getByText(/^게임중: /).filter({ visible: true })).toHaveCount(0);
     await page
       .getByRole('button', { name: /코트 1/ })
       .filter({ visible: true })

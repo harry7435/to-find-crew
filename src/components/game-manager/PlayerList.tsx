@@ -44,6 +44,8 @@ interface PlayerListProps {
   onFilterChange: (filter: AttendanceFilter) => void;
   gameCountsMap?: Map<string, number>;
   readyIds: Set<string>;
+  /** 대기열 게임에 들어 있는 선수 id. 게임중 선수에게 '다음 대기' 배지를 단다. */
+  queuedPlayerIds?: Set<string>;
   onToggleReady: (id: string) => void;
 }
 
@@ -90,6 +92,7 @@ export default function PlayerList({
   onFilterChange,
   gameCountsMap,
   readyIds,
+  queuedPlayerIds,
   onToggleReady,
 }: PlayerListProps) {
   const now = useTicker();
@@ -311,6 +314,11 @@ export default function PlayerList({
                     <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
                       <Swords className="h-3 w-3 mr-1" />
                       게임중
+                    </Badge>
+                  )}
+                  {isPlaying && queuedPlayerIds?.has(player.id) && (
+                    <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300">
+                      다음 대기
                     </Badge>
                   )}
                   {isQueued && (

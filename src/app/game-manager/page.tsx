@@ -651,6 +651,7 @@ export default function GameManagerPage() {
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
                 readyIds={readyIds}
+                queuedPlayerIds={queuedPlayerIds}
                 onToggleReady={toggleReady}
               />
             </CardContent>

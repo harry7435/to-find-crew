@@ -607,6 +607,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
                 readyIds={readyIds}
+                queuedPlayerIds={queuedPlayerIds}
                 onToggleReady={toggleReady}
               />
             </TabsContent>
