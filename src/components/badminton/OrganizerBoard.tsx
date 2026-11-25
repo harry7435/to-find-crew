@@ -49,6 +49,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     setAttendingBulk,
     removeGame,
     resetPlayers,
+    removeOneTimeGuests,
     resetWaitingTimes,
     resetGames,
     addCourt,
@@ -450,7 +451,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     }
     if (
       await confirm({
-        title: '게스트로 등록된 선수 전원을 삭제하시겠습니까?',
+        title: '로그인하지 않은 선수 전원을 삭제하시겠습니까?',
         description: '로그인 참가자는 유지됩니다',
         confirmText: '삭제',
         variant: 'destructive',
@@ -458,10 +459,38 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     ) {
       setPickedPlayers(null);
       if (await resetPlayers()) {
-        toast.success('게스트 선수 목록이 초기화되었습니다');
+        toast.success('로그인하지 않은 선수를 모두 삭제했습니다');
       }
     }
   }, [players.length, resetPlayers, confirm]);
+
+  const oneTimeCount = players.filter((p) => p.isOneTime).length;
+
+  const handleRemoveOneTimeGuests = useCallback(async () => {
+    if (oneTimeCount === 0) {
+      toast.error('1회성 게스트가 없습니다');
+      return;
+    }
+    if (
+      await confirm({
+        title: `1회성 게스트 ${oneTimeCount}명을 삭제하시겠습니까?`,
+        description: '게임중이거나 대기열에 있는 사람은 제외됩니다',
+        confirmText: '삭제',
+        variant: 'destructive',
+      })
+    ) {
+      const result = await removeOneTimeGuests();
+      if (!result) return;
+      const { removed, skipped } = result;
+      // 삭제된 사람이 뽑힌 팀에 들어 있을 수 있으므로 스냅샷 기준이 아닌 현재 선수 목록과 대조한다.
+      setPickedPlayers((prev) => (prev && prev.some((p) => p.isOneTime) && removed > 0 ? null : prev));
+      if (skipped > 0) {
+        toast.success(`${removed}명 삭제, 게임중·대기중 ${skipped}명은 남겨 두었습니다`);
+      } else {
+        toast.success(`1회성 게스트 ${removed}명을 삭제했습니다`);
+      }
+    }
+  }, [oneTimeCount, removeOneTimeGuests, confirm]);
 
   const handleResetAttendance = useCallback(async () => {
     if (!players.some((p) => p.attending)) {
@@ -741,8 +770,11 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
               <Button onClick={handleResetGames} variant="outline" size="sm">
                 게임 기록 초기화
               </Button>
+              <Button onClick={handleRemoveOneTimeGuests} variant="destructive" size="sm">
+                1회성 게스트 삭제 ({oneTimeCount}명)
+              </Button>
               <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                게스트 선수 초기화
+                로그인 안 한 선수 전체 삭제
               </Button>
             </div>
           </div>
@@ -754,6 +786,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         isOpen={editingPlayer !== null}
         onClose={() => setEditingPlayer(null)}
         onUpdate={handleUpdatePlayer}
+        showOneTime
       />
 
       <AttendancePickerModal
@@ -767,6 +800,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         isOpen={isAddPlayerModalOpen}
         onClose={() => setIsAddPlayerModalOpen(false)}
         onAddPlayer={handleAddPlayer}
+        showOneTime
       />
 
       <MobileTabBar

@@ -13,6 +13,7 @@ const playerSchema = z.object({
   gender: z.string().optional(),
   skillLevel: z.string().optional(),
   ageGroup: z.string().optional(),
+  isOneTime: z.boolean().optional(),
 });
 
 type PlayerFormData = z.infer<typeof playerSchema>;
@@ -20,9 +21,11 @@ type PlayerFormData = z.infer<typeof playerSchema>;
 interface PlayerFormProps {
   onAddPlayer: (player: Omit<Player, 'id' | 'status'>) => void;
   isDisabled?: boolean;
+  // 실시간 보드에서만 켠다. /game-manager(localStorage)에는 1회성 개념이 없다.
+  showOneTime?: boolean;
 }
 
-export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFormProps) {
+export default function PlayerForm({ onAddPlayer, isDisabled = false, showOneTime = false }: PlayerFormProps) {
   const {
     register,
     handleSubmit,
@@ -34,6 +37,7 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
       name: '',
       gender: undefined,
       skillLevel: undefined,
+      isOneTime: false,
     },
   });
 
@@ -53,6 +57,10 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
 
     if (data.ageGroup && data.ageGroup !== '') {
       playerData.ageGroup = data.ageGroup as '10s' | '20s' | '30s' | '40s' | '50s' | '60s+';
+    }
+
+    if (showOneTime && data.isOneTime) {
+      playerData.isOneTime = true;
     }
 
     onAddPlayer(playerData);
@@ -132,6 +140,18 @@ export default function PlayerForm({ onAddPlayer, isDisabled = false }: PlayerFo
           {errors.skillLevel && <p className="text-sm text-red-600">{errors.skillLevel.message}</p>}
         </div>
       </div>
+
+      {showOneTime && (
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input type="checkbox" {...register('isOneTime')} disabled={isDisabled} className="mt-0.5 h-4 w-4" />
+          <span>
+            <span className="font-medium">1회성 게스트</span>
+            <span className="block text-xs text-muted-foreground">
+              오늘만 오는 사람 — 나중에 한 번에 삭제할 수 있어요
+            </span>
+          </span>
+        </label>
+      )}
 
       <Button type="submit" disabled={isDisabled} className="w-full md:w-auto">
         등록

@@ -310,6 +310,11 @@ export default function PlayerList({
                   {player.skillLevel && (
                     <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
                   )}
+                  {player.isOneTime && (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300">
+                      게스트
+                    </Badge>
+                  )}
                   {isPlaying && (
                     <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
                       <Swords className="h-3 w-3 mr-1" />

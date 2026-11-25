@@ -96,7 +96,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('session_id', sessionId),
       supabase
         .from('guest_participants')
-        .select('id, name, gender, skill_level, age_group')
+        .select('id, name, gender, skill_level, age_group, is_one_time')
         .eq('session_id', sessionId),
       supabase
         .from('session_participant_overrides')
@@ -269,6 +269,7 @@ export function useBoardRealtime(sessionId: string) {
             gender: playerData.gender ?? 'male',
             skill_level: playerData.skillLevel ? SKILL_LEVEL_TO_NUMBER[playerData.skillLevel] : 0,
             age_group: playerData.ageGroup === '60s+' ? '60s' : (playerData.ageGroup ?? '20s'),
+            is_one_time: playerData.isOneTime === true,
           },
         ])
         .select()
@@ -350,8 +351,12 @@ export function useBoardRealtime(sessionId: string) {
       if (updates.ageGroup !== undefined) {
         profileUpdates.age_group = updates.ageGroup === '60s+' ? '60s' : updates.ageGroup;
       }
+      const player = playersRef.current.find((p) => p.id === id);
+      // 1회성 표시는 guest_participants 전용이다. 로그인 참가자에게는 적용하지 않고 무시한다.
+      if (updates.isOneTime !== undefined && player?.participantType !== 'user') {
+        profileUpdates.is_one_time = updates.isOneTime;
+      }
       if (Object.keys(profileUpdates).length > 0) {
-        const player = playersRef.current.find((p) => p.id === id);
         if (player?.participantType === 'user') {
           const overrideFields: Record<string, unknown> = {};
           if (updates.name !== undefined) overrideFields.name = updates.name;
@@ -443,10 +448,44 @@ export function useBoardRealtime(sessionId: string) {
   const resetPlayers = useCallback(async (): Promise<boolean> => {
     const { error } = await supabase.from('guest_participants').delete().eq('session_id', sessionId);
     if (error) {
-      return fail('게스트 선수 초기화에 실패했습니다', error);
+      return fail('로그인하지 않은 선수 삭제에 실패했습니다', error);
     }
     await loadSnapshot();
     return true;
+  }, [sessionId, loadSnapshot, fail]);
+
+  // 1회성 게스트 중 게임중/대기열에 있는 사람은 남긴다. 바쁜 사람은 스냅샷이 아니라 board_games에서
+  // 삭제 직전에 다시 조회한다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
+  const removeOneTimeGuests = useCallback(async (): Promise<{ removed: number; skipped: number } | null> => {
+    const { data: rows, error: selectError } = await supabase
+      .from('guest_participants')
+      .select('id')
+      .eq('session_id', sessionId)
+      .eq('is_one_time', true);
+    if (selectError) {
+      await fail('1회성 게스트 삭제에 실패했습니다', selectError);
+      return null;
+    }
+    const allIds = (rows ?? []).map((r) => r.id as string);
+    if (allIds.length === 0) {
+      await loadSnapshot();
+      return { removed: 0, skipped: 0 };
+    }
+    const { busy, error: busyError } = await fetchBusyPlayers(sessionId, allIds);
+    if (!busy) {
+      await fail('1회성 게스트 삭제에 실패했습니다', busyError);
+      return null;
+    }
+    const ids = allIds.filter((id) => !busy.playing.has(id) && !busy.queued.has(id));
+    if (ids.length > 0) {
+      const { error } = await supabase.from('guest_participants').delete().in('id', ids);
+      if (error) {
+        await fail('1회성 게스트 삭제에 실패했습니다', error);
+        return null;
+      }
+    }
+    await loadSnapshot();
+    return { removed: ids.length, skipped: allIds.length - ids.length };
   }, [sessionId, loadSnapshot, fail]);
 
   const resetWaitingTimes = useCallback(async (): Promise<boolean> => {
@@ -763,6 +802,7 @@ export function useBoardRealtime(sessionId: string) {
     setAttendingBulk,
     removeGame,
     resetPlayers,
+    removeOneTimeGuests,
     resetWaitingTimes,
     resetGames,
     addCourt,

@@ -39,3 +39,17 @@ purpose.
   - the empty-state copy above
 - Related race: [board-backfill-insert-race.md](board-backfill-insert-race.md) — the backfill can
   beat `addPlayer`'s insert and leave an organizer-added player absent.
+
+## `guest_participants.is_one_time` (1회성 게스트)
+
+- `is_one_time` is a column on `guest_participants` (`BOOLEAN NOT NULL DEFAULT false`), added by an
+  `ALTER TABLE` the user explicitly approved on 2026-11-25 as an exception to the additive-only rule.
+  Invite-link joiners are always `false`; only the organizer's add/edit forms on the realtime board
+  set it (`PlayerForm`/`PlayerAddModal`/`PlayerEditModal` take an opt-in `showOneTime` prop, so
+  `/game-manager` is unchanged). Logged-in participants never get it — `updatePlayer()` ignores
+  `isOneTime` for `participantType === 'user'`.
+- `removeOneTimeGuests()` (settings sheet) deletes by explicit id list and skips anyone in a `playing`
+  or `queued` `board_games` row. Busy players come from a DB query right before the delete
+  (`fetchBusyPlayers`), not from the snapshot, for the same reason as the other writes in
+  `game-manager-board-conventions.md`.
+- The spectator hook also selects `is_one_time` (shared `boardSnapshot.ts`), but spectators don't show the badge.

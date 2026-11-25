@@ -30,6 +30,7 @@ export interface RawGuestParticipant {
   gender: string;
   skill_level: number;
   age_group: string;
+  is_one_time?: boolean;
 }
 
 export interface RawParticipantOverride {
@@ -43,7 +44,7 @@ export interface RawParticipantOverride {
 function toPlayer(
   participantId: string,
   type: 'user' | 'guest',
-  info: { name: string; gender?: string; skill_level?: number; age_group?: string },
+  info: { name: string; gender?: string; skill_level?: number; age_group?: string; is_one_time?: boolean },
   state: BoardPlayerStateRow | undefined,
 ): Player {
   return {
@@ -57,6 +58,7 @@ function toPlayer(
     pinned: state?.pinned ?? false,
     attending: state?.attending ?? false,
     waitingSince: state?.waiting_since ?? null,
+    ...(type === 'guest' && info.is_one_time ? { isOneTime: true } : {}),
   };
 }
 
