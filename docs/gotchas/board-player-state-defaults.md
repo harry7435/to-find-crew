@@ -58,3 +58,6 @@ purpose.
   those guests, leaving a deleted id in a queued game. Same class of gap as `removePlayer`; the proper
   fix is an RPC doing check + delete in one transaction. Accepted for now.
 - The spectator hook also selects `is_one_time` (shared `boardSnapshot.ts`), but spectators don't show the badge.
+- The realtime board's old "delete every non-login player" reset (`resetPlayers` in `useBoardRealtime`)
+  was removed on purpose: it also wiped regular members the organizer had added without login. Don't
+  bring it back; `/game-manager`'s own `resetPlayers` in `useGameManager` is unrelated and stays.

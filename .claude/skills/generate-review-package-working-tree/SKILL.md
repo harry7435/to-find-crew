@@ -1,17 +1,17 @@
 ---
 name: generate-review-package-working-tree
-description: Build a task reviewer's diff package from working-tree changes (not commits) when running superpowers:subagent-driven-development in this repo, since git add/commit is forbidden here — use instead of the superpowers script `review-package`, which requires commit SHAs
+description: Build a reviewer's diff package from uncommitted working-tree changes (not commits) for superpowers:subagent-driven-development — only for the rare case where a task's changes are intentionally left uncommitted; the normal flow in this repo commits per task and uses the superpowers `review-package` script
 ---
 
 # Generate Review Package (Working Tree)
 
-This repo's `CLAUDE.md` ("Git Workflow") forbids `git add`/`git commit` — the user stages and
-commits everything themselves. That breaks the assumption behind
-`superpowers:subagent-driven-development`'s own `scripts/review-package BASE HEAD`, which needs a
-commit range to diff. Implementers here leave changes as uncommitted working-tree edits, so the
-task reviewer's diff package has to come from the working tree instead.
+**Status (2026-11-25):** this repo's `CLAUDE.md` ("Git Workflow") has allowed Claude to commit since
+2026-11-13, so the normal flow is: implementer commits per task, then the standard
+`superpowers:subagent-driven-development` `scripts/review-package BASE HEAD` builds the package.
 
-Use this skill's script anywhere that skill's docs say to run `review-package`.
+This skill was written when commits were forbidden. Keep it only for the case where a task's changes
+are deliberately left uncommitted (e.g. the user asked to review before committing): then the
+reviewer's diff package has to come from the working tree instead.
 
 ## Usage
 
@@ -42,9 +42,9 @@ just those files, then one section per file.
 
 ## When NOT to use this
 
-- If this repo's "no commit" convention ever changes, switch back to the standard
-  `superpowers:subagent-driven-development` `scripts/review-package BASE HEAD` — it's the
-  more complete tool (proper commit list, `git diff --stat`) once commits exist to diff between.
+- When the task's changes are committed (the default now) — use the standard
+  `superpowers:subagent-driven-development` `scripts/review-package BASE HEAD`; it's the more
+  complete tool (proper commit list, `git diff --stat`).
 - For the **final whole-branch review** covering multiple tasks' files together, don't loop this
   script per task — build one combined package by hand (list every touched file once, same
   new-vs-modified split) the way this session did, since the whole-branch reviewer needs one

@@ -23,7 +23,10 @@
   persistence feature added `board_player_state`, `courts`, `board_games` as brand-new tables; the
   session-scoped display-info override feature (see below) added `session_participant_overrides` —
   both rather than adding columns to existing tables (`session_participants`, `users`) or reusing old
-  table structures (`teams`/`games`).
+  table structures (`teams`/`games`). One approved exception so far: `guest_participants.is_one_time`
+  (2026-11-25, a one-off sign-off, not precedent). Before proposing any `ALTER`, check
+  `information_schema.role_table_grants` to see whether the new column needs a `GRANT`
+  (`column_privileges` alone can't tell table-level from column-level grants).
 - **`users` has column-level `SELECT` grants, and the live DB differs from this file in places.**
   `select('*')` or selecting `email`/`phone`/`provider` on `users` errors with permission denied
   (owner contact: `rpc('get_my_contact')`); `gm_*` tables exist only in the DB. Privilege
@@ -209,6 +212,8 @@
 - The backfill can beat `addPlayer`'s state-row insert (`UNIQUE (guest_participant_id)`) and leave a
   just-added player absent. This is a known, accepted gap that needs a new write step to fix. See
   `docs/gotchas/board-backfill-insert-race.md` before touching `addPlayer` or the backfill.
+- `board-player-state-defaults.md` also covers 1회성 게스트 (`guest_participants.is_one_time`) and the
+  인원 관리 modal's selection delete (`removePlayers`).
 
 ## Invite Flow: Guest/Login Duplicate-Participant Prevention
 
@@ -255,6 +260,9 @@
   requires real `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars to fully succeed
   (static generation touches the Supabase client); placeholder values are enough to catch compile/type
   errors even without a live project.
+- Don't run `pnpm build` while `pnpm dev` is serving :3000. It overwrites `.next`, the dev server starts
+  returning 500, and `pnpm test:e2e` (which reuses that server) times out. Run e2e first and build last,
+  or stop the dev server before building.
 
 ## Guest Favorites (`/badminton/favorites`) — localStorage-only by design
 
