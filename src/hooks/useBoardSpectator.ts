@@ -31,7 +31,7 @@ export function useBoardSpectator(sessionId: string) {
         .eq('session_id', sessionId),
       supabase
         .from('guest_participants')
-        .select('id, name, gender, skill_level, age_group')
+        .select('id, name, gender, skill_level, age_group, is_one_time')
         .eq('session_id', sessionId),
       supabase
         .from('session_participant_overrides')

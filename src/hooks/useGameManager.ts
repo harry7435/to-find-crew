@@ -13,6 +13,8 @@ export interface Player {
   attending?: boolean;
   waitingSince?: string | null;
   participantType?: 'user' | 'guest';
+  // 실시간 보드의 게스트 참가자에게만 의미가 있다(guest_participants.is_one_time).
+  isOneTime?: boolean;
 }
 
 export interface GameRecord {

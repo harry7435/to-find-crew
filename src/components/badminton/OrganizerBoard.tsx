@@ -13,6 +13,7 @@ import { Player } from '@/hooks/useGameManager';
 import PlayerList, { AttendanceFilter } from '@/components/game-manager/PlayerList';
 import PlayerAddModal from '@/components/game-manager/PlayerAddModal';
 import PlayerEditModal from '@/components/game-manager/PlayerEditModal';
+import RosterManageModal from '@/components/badminton/RosterManageModal';
 import AttendancePickerModal from '@/components/game-manager/AttendancePickerModal';
 import TeamPicker from '@/components/game-manager/TeamPicker';
 import CustomTeamPicker from '@/components/game-manager/CustomTeamPicker';
@@ -48,7 +49,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     setAttending,
     setAttendingBulk,
     removeGame,
-    resetPlayers,
+    removePlayers,
     resetWaitingTimes,
     resetGames,
     addCourt,
@@ -72,6 +73,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
   const [isAddingCourt, setIsAddingCourt] = useState(false);
   const [isCustomPicking, setIsCustomPicking] = useState(false);
   const [isAttendancePickerOpen, setIsAttendancePickerOpen] = useState(false);
+  const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<'pool' | 'pick'>('pool');
   // 모바일 전용 하단 탭. 인원/팀뽑기는 왼쪽 카드의 leftTab과 같은 화면이라 서로 맞춘다.
   const [mobileTab, setMobileTab] = useState<MobileSection>('players');
@@ -443,25 +445,54 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     }
   }, [games.length, resetGames, resetWaitingTimes, confirm]);
 
-  const handleResetPlayers = useCallback(async () => {
-    if (players.length === 0) {
-      toast.error('삭제할 선수가 없습니다');
-      return;
-    }
-    if (
-      await confirm({
-        title: '게스트로 등록된 선수 전원을 삭제하시겠습니까?',
-        description: '로그인 참가자는 유지됩니다',
-        confirmText: '삭제',
-        variant: 'destructive',
-      })
-    ) {
-      setPickedPlayers(null);
-      if (await resetPlayers()) {
-        toast.success('게스트 선수 목록이 초기화되었습니다');
+  const handleToggleOneTime = useCallback(
+    async (id: string) => {
+      const player = players.find((p) => p.id === id);
+      if (!player || player.participantType === 'user') return;
+      const next = !player.isOneTime;
+      if (await updatePlayer(id, { isOneTime: next })) {
+        toast.success(`${player.name} 선수를 ${next ? '1회성' : '고정'} 게스트로 바꿨습니다`);
       }
-    }
-  }, [players.length, resetPlayers, confirm]);
+    },
+    [players, updatePlayer],
+  );
+
+  // 인원 관리 모달에서 체크한 선수들을 삭제한다. 모달 선택에서 뺄 id(삭제됨 + 게임중·대기중으로 제외됨)를 반환한다. 취소/실패는 빈 배열.
+  const handleRemoveSelected = useCallback(
+    async (ids: string[]): Promise<string[]> => {
+      if (ids.length === 0) return [];
+      const userCount = players.filter((p) => ids.includes(p.id) && p.participantType === 'user').length;
+      const busyNote = '게임중이거나 대기열에 있는 사람은 제외됩니다';
+      if (
+        !(await confirm({
+          title: `선택한 ${ids.length}명을 삭제하시겠습니까?`,
+          description: userCount > 0 ? `로그인 참가자 ${userCount}명은 모임에서 나가게 됩니다. ${busyNote}` : busyNote,
+          confirmText: '삭제',
+          variant: 'destructive',
+        }))
+      ) {
+        return [];
+      }
+      const result = await removePlayers(ids);
+      if (!result) return [];
+      const { removedIds, skippedBusy, failedIds } = result;
+      removedIds.forEach((id) => removeReady(id));
+      // 뽑힌 팀·직접 고르기에 실제로 삭제된 사람이 있을 때만 초기화한다.
+      setPickedPlayers((prev) => (prev && prev.some((p) => removedIds.includes(p.id)) ? null : prev));
+      setSelectedPlayers((prev) =>
+        prev.some((p) => removedIds.includes(p.id)) ? prev.filter((p) => !removedIds.includes(p.id)) : prev,
+      );
+      const skippedNote = skippedBusy.length > 0 ? `게임중·대기중이라 ${skippedBusy.length}명을 남겨 두었습니다` : '';
+      if (removedIds.length > 0) {
+        toast.success(`${removedIds.length}명을 삭제했습니다` + (skippedNote ? `, ${skippedNote}` : ''));
+      } else if (failedIds.length === 0) {
+        toast('삭제된 사람이 없습니다' + (skippedNote ? `. ${skippedNote}` : ''));
+      }
+      if (failedIds.length > 0) toast.error(`${failedIds.length}명은 삭제하지 못했습니다. 다시 시도해주세요`);
+      return [...removedIds, ...skippedBusy];
+    },
+    [players, confirm, removePlayers, removeReady],
+  );
 
   const handleResetAttendance = useCallback(async () => {
     if (!players.some((p) => p.attending)) {
@@ -602,6 +633,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onTogglePinned={handleTogglePinned}
                 onToggleAttending={handleToggleAttending}
                 onOpenAttendancePicker={() => setIsAttendancePickerOpen(true)}
+                onOpenRosterManage={() => setIsRosterOpen(true)}
                 onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
                 filter={attendanceFilter}
                 onFilterChange={setAttendanceFilter}
@@ -741,9 +773,6 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
               <Button onClick={handleResetGames} variant="outline" size="sm">
                 게임 기록 초기화
               </Button>
-              <Button onClick={handleResetPlayers} variant="destructive" size="sm">
-                게스트 선수 초기화
-              </Button>
             </div>
           </div>
         </SheetContent>
@@ -754,6 +783,20 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         isOpen={editingPlayer !== null}
         onClose={() => setEditingPlayer(null)}
         onUpdate={handleUpdatePlayer}
+        showOneTime
+      />
+
+      {/* 수정·등록 모달이 열려 있는 동안은 인원 관리 모달을 숨긴다(상태는 유지). 같은 z-50 다이얼로그를
+          겹치면 Radix 포커스 트랩이 서로 싸울 수 있어, 닫고 여는 대신 한 번에 하나만 보이게 한다. */}
+      <RosterManageModal
+        isOpen={isRosterOpen && editingPlayer === null && !isAddPlayerModalOpen}
+        onClose={() => setIsRosterOpen(false)}
+        players={players}
+        onAddPlayerClick={() => setIsAddPlayerModalOpen(true)}
+        onEditPlayer={handleEditPlayer}
+        onRemovePlayer={handleRemovePlayer}
+        onToggleOneTime={handleToggleOneTime}
+        onRemoveSelected={handleRemoveSelected}
       />
 
       <AttendancePickerModal
@@ -767,6 +810,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         isOpen={isAddPlayerModalOpen}
         onClose={() => setIsAddPlayerModalOpen(false)}
         onAddPlayer={handleAddPlayer}
+        showOneTime
       />
 
       <MobileTabBar

@@ -15,6 +15,7 @@ const playerSchema = z.object({
   gender: z.string().optional(),
   skillLevel: z.string().optional(),
   ageGroup: z.string().optional(),
+  isOneTime: z.boolean().optional(),
 });
 
 type PlayerFormData = z.infer<typeof playerSchema>;
@@ -24,9 +25,17 @@ interface PlayerEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, updates: Partial<Omit<Player, 'id'>>) => void;
+  // 실시간 보드에서만 켠다. 로그인 참가자에게는 표시하지 않는다.
+  showOneTime?: boolean;
 }
 
-export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: PlayerEditModalProps) {
+export default function PlayerEditModal({
+  player,
+  isOpen,
+  onClose,
+  onUpdate,
+  showOneTime = false,
+}: PlayerEditModalProps) {
   const {
     register,
     handleSubmit,
@@ -43,6 +52,7 @@ export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: P
         gender: player.gender || '',
         skillLevel: player.skillLevel || '',
         ageGroup: player.ageGroup || '',
+        isOneTime: player.isOneTime === true,
       });
     }
   }, [player, isOpen, reset]);
@@ -72,6 +82,10 @@ export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: P
       updates.ageGroup = undefined;
     }
 
+    if (showOneTime && player.participantType === 'guest') {
+      updates.isOneTime = data.isOneTime === true;
+    }
+
     onUpdate(player.id, updates);
     onClose();
   };
@@ -79,6 +93,7 @@ export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: P
   if (!player) return null;
 
   const isUser = player.participantType === 'user';
+  const canEditOneTime = showOneTime && player.participantType === 'guest';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -146,6 +161,18 @@ export default function PlayerEditModal({ player, isOpen, onClose, onUpdate }: P
               <option value="E">초심 or E조</option>
             </select>
           </div>
+
+          {canEditOneTime && (
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input type="checkbox" {...register('isOneTime')} className="mt-0.5 h-4 w-4" />
+              <span>
+                <span className="font-medium">1회성 게스트</span>
+                <span className="block text-xs text-muted-foreground">
+                  오늘만 오는 사람 — 나중에 한 번에 삭제할 수 있어요
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">

@@ -96,7 +96,7 @@ export function useBoardRealtime(sessionId: string) {
         .eq('session_id', sessionId),
       supabase
         .from('guest_participants')
-        .select('id, name, gender, skill_level, age_group')
+        .select('id, name, gender, skill_level, age_group, is_one_time')
         .eq('session_id', sessionId),
       supabase
         .from('session_participant_overrides')
@@ -269,6 +269,7 @@ export function useBoardRealtime(sessionId: string) {
             gender: playerData.gender ?? 'male',
             skill_level: playerData.skillLevel ? SKILL_LEVEL_TO_NUMBER[playerData.skillLevel] : 0,
             age_group: playerData.ageGroup === '60s+' ? '60s' : (playerData.ageGroup ?? '20s'),
+            is_one_time: playerData.isOneTime === true,
           },
         ])
         .select()
@@ -350,8 +351,12 @@ export function useBoardRealtime(sessionId: string) {
       if (updates.ageGroup !== undefined) {
         profileUpdates.age_group = updates.ageGroup === '60s+' ? '60s' : updates.ageGroup;
       }
+      const player = playersRef.current.find((p) => p.id === id);
+      // 1회성 표시는 guest_participants 전용이다. 로그인 참가자에게는 적용하지 않고 무시한다.
+      if (updates.isOneTime !== undefined && player?.participantType !== 'user') {
+        profileUpdates.is_one_time = updates.isOneTime;
+      }
       if (Object.keys(profileUpdates).length > 0) {
-        const player = playersRef.current.find((p) => p.id === id);
         if (player?.participantType === 'user') {
           const overrideFields: Record<string, unknown> = {};
           if (updates.name !== undefined) overrideFields.name = updates.name;
@@ -440,14 +445,67 @@ export function useBoardRealtime(sessionId: string) {
     [loadSnapshot, fail],
   );
 
-  const resetPlayers = useCallback(async (): Promise<boolean> => {
-    const { error } = await supabase.from('guest_participants').delete().eq('session_id', sessionId);
-    if (error) {
-      return fail('게스트 선수 초기화에 실패했습니다', error);
-    }
-    await loadSnapshot();
-    return true;
-  }, [sessionId, loadSnapshot, fail]);
+  // 선택한 선수를 한꺼번에 삭제한다. 게임중/대기열에 있는 사람은 스냅샷이 아니라 board_games에서
+  // 삭제 직전에 다시 조회해 건너뛴다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
+  const removePlayers = useCallback(
+    async (ids: string[]): Promise<{ removedIds: string[]; skippedBusy: string[]; failedIds: string[] } | null> => {
+      if (ids.length === 0) return { removedIds: [], skippedBusy: [], failedIds: [] };
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids);
+      if (!busy) {
+        await fail('선수 삭제에 실패했습니다', busyError);
+        return null;
+      }
+      const skippedBusy = ids.filter((id) => busy.playing.has(id) || busy.queued.has(id));
+      const targets = ids.filter((id) => !skippedBusy.includes(id));
+      const isUserId = (id: string) => playersRef.current.find((p) => p.id === id)?.participantType === 'user';
+      const guestIds = targets.filter((id) => !isUserId(id));
+      const userIds = targets.filter(isUserId);
+
+      let removedIds: string[] = [];
+      if (guestIds.length > 0) {
+        const { data: deleted, error } = await supabase
+          .from('guest_participants')
+          .delete()
+          .in('id', guestIds)
+          .eq('session_id', sessionId)
+          .select('id');
+        if (error) {
+          await fail('선수 삭제에 실패했습니다', error);
+          return null;
+        }
+        // 실제로 지워진 행 기준으로 센다 (다른 운영자가 먼저 지웠을 수 있음).
+        removedIds = (deleted ?? []).map((r) => r.id as string);
+      }
+
+      const failedIds: string[] = [];
+      const userResults = await Promise.all(
+        userIds.map(async (id) => {
+          // fetch는 오프라인이면 응답 대신 예외를 던진다.
+          const ok = await fetch('/api/badminton/sessions/remove-participant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, participant_id: id, participant_type: 'user' }),
+          })
+            .then((response) => {
+              if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/remove-participant', response.status);
+              return response.ok;
+            })
+            .catch(() => {
+              recordApiFailure('POST', '/api/badminton/sessions/remove-participant', 'network');
+              return false;
+            });
+          return { id, ok };
+        }),
+      );
+      for (const { id, ok } of userResults) {
+        if (ok) removedIds.push(id);
+        else failedIds.push(id);
+      }
+      await loadSnapshot();
+      return { removedIds, skippedBusy, failedIds };
+    },
+    [sessionId, loadSnapshot, fail],
+  );
 
   const resetWaitingTimes = useCallback(async (): Promise<boolean> => {
     const nowIso = new Date().toISOString();
@@ -762,7 +820,7 @@ export function useBoardRealtime(sessionId: string) {
     setAttending,
     setAttendingBulk,
     removeGame,
-    resetPlayers,
+    removePlayers,
     resetWaitingTimes,
     resetGames,
     addCourt,

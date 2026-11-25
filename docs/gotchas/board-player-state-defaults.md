@@ -39,3 +39,22 @@ purpose.
   - the empty-state copy above
 - Related race: [board-backfill-insert-race.md](board-backfill-insert-race.md) — the backfill can
   beat `addPlayer`'s insert and leave an organizer-added player absent.
+
+## `guest_participants.is_one_time` (1회성 게스트)
+
+- `is_one_time` is a column on `guest_participants` (`BOOLEAN NOT NULL DEFAULT false`), added by an
+  `ALTER TABLE` the user explicitly approved on 2026-11-25 as an exception to the additive-only rule.
+  Invite-link joiners are always `false`; only the organizer's add/edit forms on the realtime board
+  set it (`PlayerForm`/`PlayerAddModal`/`PlayerEditModal` take an opt-in `showOneTime` prop, so
+  `/game-manager` is unchanged). Logged-in participants never get it — `updatePlayer()` ignores
+  `isOneTime` for `participantType === 'user'`.
+- Bulk delete is checkbox selection in the 인원 관리 modal (`RosterManageModal.tsx`; "선택 삭제 (N명)" footer
+  button → `removePlayers(ids)`). The one-time cleanup path is the 1회성 tab + "전체 선택" (applies to the
+  visible, non-busy rows). It deletes by explicit id list (guests via one `.in('id', ids)` delete,
+  logged-in users via the remove-participant API) and skips anyone in a `playing` or `queued`
+  `board_games` row. Busy players come from a DB query right before the delete (`fetchBusyPlayers`), not
+  from the snapshot, for the same reason as the other writes in `game-manager-board-conventions.md`.
+- Known race: between the `board_games` busy check and the delete, another organizer can queue one of
+  those guests, leaving a deleted id in a queued game. Same class of gap as `removePlayer`; the proper
+  fix is an RPC doing check + delete in one transaction. Accepted for now.
+- The spectator hook also selects `is_one_time` (shared `boardSnapshot.ts`), but spectators don't show the badge.

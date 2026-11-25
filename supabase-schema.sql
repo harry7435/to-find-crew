@@ -803,3 +803,11 @@ REVOKE ALL ON FUNCTION upsert_push_subscription(UUID, UUID, UUID, TEXT, TEXT, TE
 GRANT EXECUTE ON FUNCTION upsert_push_subscription(UUID, UUID, UUID, TEXT, TEXT, TEXT) TO anon, authenticated;
 REVOKE ALL ON FUNCTION delete_push_subscription(UUID, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION delete_push_subscription(UUID, TEXT) TO anon, authenticated;
+
+-- ============================================
+-- 1회성 게스트 표시 (guest_participants.is_one_time)
+-- ============================================
+-- 예외 승인: 이 ALTER TABLE은 "추가형(additive-only)" 규칙의 예외로 사용자가 명시적으로 승인했다 (2026-11-25).
+-- guest_participants의 anon/authenticated 테이블 단위 권한은 확인했으므로 별도 GRANT는 필요 없다.
+-- 초대 링크로 들어온 게스트는 기본값(false)이며, 운영진이 보드에서 직접 등록/수정할 때만 true가 된다.
+ALTER TABLE guest_participants ADD COLUMN IF NOT EXISTS is_one_time BOOLEAN NOT NULL DEFAULT false;
