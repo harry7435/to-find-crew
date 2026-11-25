@@ -251,21 +251,33 @@ export default function SpectatorBoard({ sessionId, myParticipantId = null }: Sp
                 <p className="text-sm text-gray-500 text-center py-4">운영진이 팀을 짜면 여기에 순서가 표시돼요</p>
               ) : (
                 <div className="space-y-2">
-                  {queue.map((item, idx) => (
-                    <div key={item.id} className="border border-purple-200 bg-purple-50 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-purple-100 text-purple-800 border-purple-300 text-xs">#{idx + 1}</Badge>
-                        <Badge variant="outline" className="bg-white text-purple-700 border-purple-200 text-xs">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {formatElapsed(item.queuedAt, now) ?? '방금'}
-                        </Badge>
+                  {queue.map((item, idx) => {
+                    // 다른 코트에서 아직 게임중인 멤버 — 왜 아직 배정되지 않는지 보여준다
+                    const busyNames = item.playerIds
+                      .map(getPlayer)
+                      .filter((p) => p.status === 'playing')
+                      .map((p) => p.name);
+                    return (
+                      <div key={item.id} className="border border-purple-200 bg-purple-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-300 text-xs">#{idx + 1}</Badge>
+                          <Badge variant="outline" className="bg-white text-purple-700 border-purple-200 text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {formatElapsed(item.queuedAt, now) ?? '방금'}
+                          </Badge>
+                        </div>
+                        <TeamCourtBox
+                          players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
+                          size="compact"
+                        />
+                        {busyNames.length > 0 && (
+                          <p className="text-xs text-green-700 mt-2">
+                            게임중: {busyNames.join(', ')} · 끝나면 배정할 수 있어요
+                          </p>
+                        )}
                       </div>
-                      <TeamCourtBox
-                        players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
-                        size="compact"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
