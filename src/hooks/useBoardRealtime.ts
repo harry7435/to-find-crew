@@ -525,6 +525,12 @@ export function useBoardRealtime(sessionId: string) {
         await updatePlayerStates(toQueue, { player_status: 'active' });
         return fail('대기열 추가에 실패했습니다. 다시 시도해주세요');
       }
+      // 게임중 선수의 pinned 해제(useGameManager와 동일). 표시용 부가 상태라 실패해도 대기열 추가는
+      // 되돌리지 않는다 — 되돌리면 오히려 성공한 toQueue 쓰기까지 흔들려 복구가 더 복잡해진다.
+      await updatePlayerStates(
+        playerIds.filter((id) => busy.playing.has(id)),
+        { pinned: false },
+      );
       await loadSnapshot();
       return true;
     },

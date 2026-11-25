@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,8 @@ function getStatusBadge(player: Player) {
 export default function SpectatorBoard({ sessionId, myParticipantId = null }: SpectatorBoardProps) {
   const { players, courts, queue, games, isLoading } = useBoardSpectator(sessionId);
   const now = useTicker();
+  // 게임중이면서 대기 게임에도 든 선수 — 저장 상태는 playing이라 별도 배지로 보여준다(읽기 전용)
+  const queuedPlayerIds = useMemo(() => new Set(queue.flatMap((q) => q.playerIds)), [queue]);
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   // 모바일에서는 한 번에 한 섹션만 보여준다.
   type SpectatorSection = 'courts' | 'queue' | 'waiting';
@@ -361,6 +363,11 @@ export default function SpectatorBoard({ sessionId, myParticipantId = null }: Sp
                         </Badge>
                       )}
                       {getStatusBadge(player)}
+                      {player.status === 'playing' && queuedPlayerIds.has(player.id) && (
+                        <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300 text-xs">
+                          다음 대기
+                        </Badge>
+                      )}
                       <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-gray-500">
                         {gameCounts.get(player.id) ?? 0}게임
                       </span>

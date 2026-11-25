@@ -65,11 +65,16 @@
   writing (`fetchBusyPlayers`, not the local snapshot, so another organizer's change is seen);
   `useGameManager` derives it from in-memory state. The two are an intentional pair — change both.
   **Accepted races (no DB function yet):** two organizers queuing the same playing player into
-  different games can break the 1+1 invariant, and an `endCourtGame` whose busy-read lands just
-  before another organizer's enqueue insert can set that player to `active` while they sit in a
-  queued game — status stays wrong until that game is assigned or cancelled. The game-level invariant
-  still holds because `enqueueGame` checks `board_games`, not stored status, and the court-assignment
-  guard blocks double-booking.
+  different games can break the 1+1 invariant. An `endCourtGame` racing an enqueue for the same
+  playing player P (~100ms window) can leave P stored `active` while in a queued game, in either
+  ordering (end's busy-read before the enqueue insert, or enqueue's busy-read before end) — status
+  self-heals when that game is assigned or cancelled. The reverse: organizer A's `removeFromQueue`
+  reads P still playing (so skips P) while organizer B's `endCourtGame` still sees A's queued game
+  and writes P `queued`, then A deletes the queued game — P is stuck `queued` with no game row.
+  Nothing in the UI fixes it (attendance/rest toggles refuse `queued`, `loadSnapshot` doesn't
+  reconcile); it needs a manual DB edit of `board_player_state.player_status`. The game-level
+  invariant still holds because `enqueueGame` checks `board_games`, not stored status, and the
+  court-assignment guard blocks double-booking.
 - **`useBoardRealtime.ts`'s multi-step writes are ordered so a mid-sequence failure is recoverable by
   pressing the same button again — don't reorder them.** Each board action touches one `board_games`
   row plus up to four `board_player_state` rows as separate requests (no transaction), so a network
