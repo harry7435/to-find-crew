@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import MySessionsEntry from '@/components/home/MySessionsEntry';
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -31,9 +32,13 @@ export default function Home() {
 
       {/* 역할별 입구 — 처음 온 사람이 "나는 운영진인가 참여자인가"만 고르면 되게 한다 */}
       <section className="container mx-auto p-4">
+        {/* 로그인한 사람에게만 보이는 역할 중립 입구 — 두 역할 카드보다 눈에 덜 띄게 위에 얇게 둔다 */}
+        <div className="max-w-2xl mx-auto mb-4 empty:hidden">
+          <MySessionsEntry />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
           <Link
-            href="/badminton/my-sessions"
+            href="/badminton/create"
             className="group rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <Card className="h-full border-blue-200 transition-shadow group-hover:shadow-md">
@@ -42,7 +47,7 @@ export default function Home() {
                   운영진
                 </span>
                 <CardTitle className="flex items-center justify-between text-xl">
-                  모임 운영하기
+                  모임 만들기
                   <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </CardTitle>
                 <CardDescription>모임을 만들고 코트·게임을 배정해요</CardDescription>

@@ -5,8 +5,10 @@ test('홈: 역할별 입구와 보조 기능', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('코트·게임 관리를 한 번에');
 
-  await expect(page.getByRole('link', { name: /모임 운영하기/ })).toHaveAttribute('href', '/badminton/my-sessions');
+  await expect(page.getByRole('link', { name: /모임 만들기/ })).toHaveAttribute('href', '/badminton/create');
   await expect(page.getByRole('link', { name: /코드로 참여하기/ })).toHaveAttribute('href', '/badminton/join');
+  // 역할 카드가 보인 뒤(하이드레이션 이후)에도 로그아웃 방문자에게는 '내 모임' 입구가 없어야 한다
+  await expect(page.getByRole('link', { name: /내 모임/ })).toHaveCount(0);
 
   await expect(page.getByText('이 기기에만 저장돼요')).toBeVisible();
   await expect(page.getByText('손가락으로 당첨자를 뽑아요')).toBeVisible();
