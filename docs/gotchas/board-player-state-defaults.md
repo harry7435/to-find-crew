@@ -52,4 +52,7 @@ purpose.
   or `queued` `board_games` row. Busy players come from a DB query right before the delete
   (`fetchBusyPlayers`), not from the snapshot, for the same reason as the other writes in
   `game-manager-board-conventions.md`.
+- Known race: between the `board_games` busy check and the delete, another organizer can queue one of
+  those guests, leaving a deleted id in a queued game. Same class of gap as `removePlayer`; the proper
+  fix is an RPC doing check + delete in one transaction. Accepted for now.
 - The spectator hook also selects `is_one_time` (shared `boardSnapshot.ts`), but spectators don't show the badge.

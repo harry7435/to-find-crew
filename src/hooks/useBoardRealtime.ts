@@ -456,7 +456,7 @@ export function useBoardRealtime(sessionId: string) {
 
   // 1회성 게스트 중 게임중/대기열에 있는 사람은 남긴다. 바쁜 사람은 스냅샷이 아니라 board_games에서
   // 삭제 직전에 다시 조회한다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
-  const removeOneTimeGuests = useCallback(async (): Promise<{ removed: number; skipped: number } | null> => {
+  const removeOneTimeGuests = useCallback(async (): Promise<{ removedIds: string[]; skipped: number } | null> => {
     const { data: rows, error: selectError } = await supabase
       .from('guest_participants')
       .select('id')
@@ -469,7 +469,7 @@ export function useBoardRealtime(sessionId: string) {
     const allIds = (rows ?? []).map((r) => r.id as string);
     if (allIds.length === 0) {
       await loadSnapshot();
-      return { removed: 0, skipped: 0 };
+      return { removedIds: [], skipped: 0 };
     }
     const { busy, error: busyError } = await fetchBusyPlayers(sessionId, allIds);
     if (!busy) {
@@ -477,15 +477,18 @@ export function useBoardRealtime(sessionId: string) {
       return null;
     }
     const ids = allIds.filter((id) => !busy.playing.has(id) && !busy.queued.has(id));
+    let removedIds: string[] = [];
     if (ids.length > 0) {
-      const { error } = await supabase.from('guest_participants').delete().in('id', ids);
+      const { data: deleted, error } = await supabase.from('guest_participants').delete().in('id', ids).select('id');
       if (error) {
         await fail('1회성 게스트 삭제에 실패했습니다', error);
         return null;
       }
+      // 실제로 지워진 행 기준으로 센다 (다른 운영자가 먼저 지웠을 수 있음).
+      removedIds = (deleted ?? []).map((r) => r.id as string);
     }
     await loadSnapshot();
-    return { removed: ids.length, skipped: allIds.length - ids.length };
+    return { removedIds, skipped: allIds.length - removedIds.length };
   }, [sessionId, loadSnapshot, fail]);
 
   const resetWaitingTimes = useCallback(async (): Promise<boolean> => {

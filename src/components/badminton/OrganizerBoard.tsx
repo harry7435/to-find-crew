@@ -481,9 +481,10 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     ) {
       const result = await removeOneTimeGuests();
       if (!result) return;
-      const { removed, skipped } = result;
-      // 삭제된 사람이 뽑힌 팀에 들어 있을 수 있으므로 스냅샷 기준이 아닌 현재 선수 목록과 대조한다.
-      setPickedPlayers((prev) => (prev && prev.some((p) => p.isOneTime) && removed > 0 ? null : prev));
+      const { removedIds, skipped } = result;
+      const removed = removedIds.length;
+      // 뽑힌 팀에 실제로 삭제된 사람이 있을 때만 초기화한다 (게임중·대기중이라 남은 사람은 유지).
+      setPickedPlayers((prev) => (prev && prev.some((p) => removedIds.includes(p.id)) ? null : prev));
       if (skipped > 0) {
         toast.success(`${removed}명 삭제, 게임중·대기중 ${skipped}명은 남겨 두었습니다`);
       } else {
