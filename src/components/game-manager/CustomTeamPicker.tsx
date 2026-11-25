@@ -29,6 +29,8 @@ interface CustomTeamPickerProps {
   boundedOnDesktop?: boolean;
   /** 확정 요청이 진행 중이면 true. 고른 4명을 남겨 둔 채 버튼을 잠근다(보드 전용, 체험판은 생략). */
   isSubmitting?: boolean;
+  /** 대기 게임에 속한 모든 선수 id. 이미 대기열에 있는 선수는 토글과 관계없이 고를 수 없다(코트 1 + 대기 1). */
+  queuedPlayerIds: Set<string>;
 }
 
 function getSkillLevelColor(level?: string): string {
@@ -76,23 +78,41 @@ export default function CustomTeamPicker({
   onEditingSelectionChange,
   boundedOnDesktop = false,
   isSubmitting = false,
+  queuedPlayerIds,
 }: CustomTeamPickerProps) {
   const now = useTicker();
   const [sort, setSort] = useState<SortOption>('wait');
+  const [includePlaying, setIncludePlaying] = useState(false);
 
-  const activePlayers = [...players.filter((p) => p.status === 'active')].sort((a, b) => {
-    if (sort === 'name') return a.name.localeCompare(b.name, 'ko');
-    if (sort === 'game') {
-      const aCount = getGameCount(a.id, games);
-      const bCount = getGameCount(b.id, games);
-      if (aCount !== bCount) return aCount - bCount;
+  const sortPlayers = (list: Player[]) =>
+    [...list].sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name, 'ko');
+      if (sort === 'game') {
+        const aCount = getGameCount(a.id, games);
+        const bCount = getGameCount(b.id, games);
+        if (aCount !== bCount) return aCount - bCount;
+        return a.name.localeCompare(b.name, 'ko');
+      }
+      const aT = a.waitingSince ? new Date(a.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+      const bT = b.waitingSince ? new Date(b.waitingSince).getTime() : Number.POSITIVE_INFINITY;
+      if (aT !== bT) return aT - bT; // 오래 기다린 순
       return a.name.localeCompare(b.name, 'ko');
+    });
+
+  const activePlayers = sortPlayers(players.filter((p) => p.status === 'active'));
+  // 게임중이면서 아직 대기 게임에 없는 선수만 — 끝나자마자 다음 게임에 들어갈 수 있게 미리 넣는 용도
+  const playingPlayers = includePlaying
+    ? sortPlayers(players.filter((p) => p.status === 'playing' && !queuedPlayerIds.has(p.id)))
+    : [];
+
+  const handleIncludePlayingChange = (checked: boolean) => {
+    setIncludePlaying(checked);
+    // 끄면 이미 고른 게임중 선수가 보이지 않는 채로 확정되지 않도록 선택에서 뺀다
+    if (!checked) {
+      const next = selectedPlayers.filter((p) => p.status !== 'playing');
+      if (next.length !== selectedPlayers.length) onSelectedPlayersChange(next);
     }
-    const aT = a.waitingSince ? new Date(a.waitingSince).getTime() : Number.POSITIVE_INFINITY;
-    const bT = b.waitingSince ? new Date(b.waitingSince).getTime() : Number.POSITIVE_INFINITY;
-    if (aT !== bT) return aT - bT; // 오래 기다린 순
-    return a.name.localeCompare(b.name, 'ko');
-  });
+  };
 
   const handleTogglePlayer = (player: Player) => {
     const isSelected = selectedPlayers.find((p) => p.id === player.id);
@@ -103,6 +123,58 @@ export default function CustomTeamPicker({
       onSelectedPlayersChange(next);
       if (next.length === 4) onEditingSelectionChange(false);
     }
+  };
+
+  const renderPlayerButton = (player: Player) => {
+    const isSelected = selectedPlayers.find((p) => p.id === player.id);
+    const isPinned = player.pinned === true;
+    const canSelect = selectedPlayers.length < 4 || isSelected;
+    const waitingLabel = formatElapsed(player.waitingSince, now);
+    const genderColor = getGenderColor(player.gender);
+
+    return (
+      <button
+        key={player.id}
+        onClick={() => handleTogglePlayer(player)}
+        disabled={!canSelect}
+        className={`flex items-center justify-between p-2 border rounded-lg text-left transition-colors ${
+          isSelected
+            ? 'bg-blue-50 border-blue-300'
+            : canSelect
+              ? 'hover:bg-gray-50 border-gray-200'
+              : 'opacity-50 cursor-not-allowed border-gray-200'
+        }`}
+      >
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className={`text-lg ${genderColor}`}>{getGenderIcon(player.gender)}</span>
+          <span className={`font-medium ${genderColor}`}>{player.name}</span>
+          {isPinned && (
+            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+              <Star className="h-3 w-3 mr-1 fill-yellow-400" />
+              필수
+            </Badge>
+          )}
+          {player.status === 'playing' && (
+            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+              게임중
+            </Badge>
+          )}
+          {player.skillLevel && <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>}
+          {waitingLabel && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              <Clock className="h-3 w-3 mr-1" />
+              {waitingLabel}
+            </Badge>
+          )}
+          {/* 인원 풀과 달리 0게임도 보여준다 — 누가 덜 뛰었는지 비교하는 화면이라서 */}
+          <span className="flex items-center gap-1 text-xs text-gray-600">
+            <Trophy className="h-3 w-3" />
+            {getGameCount(player.id, games)}게임
+          </span>
+        </div>
+        {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+      </button>
+    );
   };
 
   const isComplete = selectedPlayers.length === 4;
@@ -135,7 +207,16 @@ export default function CustomTeamPicker({
                 {selectedPlayers.length}/4 선택
               </Badge>
             </h3>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includePlaying}
+                  onChange={(e) => handleIncludePlayingChange(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                게임중인 선수 포함
+              </label>
               <span className="text-gray-400 font-medium">정렬</span>
               <div className="flex rounded-md border border-gray-200 overflow-hidden">
                 {(
@@ -161,58 +242,27 @@ export default function CustomTeamPicker({
           <div
             className={`px-4 pb-3 max-h-[55vh] overflow-y-auto scroll-fade ${b ? 'md:max-h-none md:flex-1 md:min-h-0' : ''}`}
           >
-            {activePlayers.length === 0 ? (
+            {activePlayers.length === 0 && playingPlayers.length === 0 ? (
               <p className="text-sm text-gray-500 text-center py-4">활성 선수가 없습니다</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {activePlayers.map((player) => {
-                  const isSelected = selectedPlayers.find((p) => p.id === player.id);
-                  const isPinned = player.pinned === true;
-                  const canSelect = selectedPlayers.length < 4 || isSelected;
-                  const waitingLabel = formatElapsed(player.waitingSince, now);
-                  const genderColor = getGenderColor(player.gender);
-
-                  return (
-                    <button
-                      key={player.id}
-                      onClick={() => handleTogglePlayer(player)}
-                      disabled={!canSelect}
-                      className={`flex items-center justify-between p-2 border rounded-lg text-left transition-colors ${
-                        isSelected
-                          ? 'bg-blue-50 border-blue-300'
-                          : canSelect
-                            ? 'hover:bg-gray-50 border-gray-200'
-                            : 'opacity-50 cursor-not-allowed border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className={`text-lg ${genderColor}`}>{getGenderIcon(player.gender)}</span>
-                        <span className={`font-medium ${genderColor}`}>{player.name}</span>
-                        {isPinned && (
-                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                            <Star className="h-3 w-3 mr-1 fill-yellow-400" />
-                            필수
-                          </Badge>
-                        )}
-                        {player.skillLevel && (
-                          <Badge className={getSkillLevelColor(player.skillLevel)}>{player.skillLevel}</Badge>
-                        )}
-                        {waitingLabel && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {waitingLabel}
-                          </Badge>
-                        )}
-                        {/* 인원 풀과 달리 0게임도 보여준다 — 누가 덜 뛰었는지 비교하는 화면이라서 */}
-                        <span className="flex items-center gap-1 text-xs text-gray-600">
-                          <Trophy className="h-3 w-3" />
-                          {getGameCount(player.id, games)}게임
-                        </span>
-                      </div>
-                      {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
-                    </button>
-                  );
-                })}
+              <div className="flex flex-col gap-3">
+                {activePlayers.length > 0 && (
+                  <div
+                    role="group"
+                    aria-label="쉬는 선수"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2"
+                  >
+                    {activePlayers.map(renderPlayerButton)}
+                  </div>
+                )}
+                {playingPlayers.length > 0 && (
+                  <div role="group" aria-label="게임중 — 끝나면 바로 다음 게임">
+                    <p className="text-xs font-medium text-gray-500 mb-1.5">게임중 — 끝나면 바로 다음 게임</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                      {playingPlayers.map(renderPlayerButton)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

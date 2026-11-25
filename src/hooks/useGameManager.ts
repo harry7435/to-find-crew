@@ -36,6 +36,8 @@ export interface QueueItem {
   queuedAt: string;
 }
 
+export type AssignResult = { ok: true } | { ok: false; busyNames: string[] };
+
 const PLAYERS_KEY = 'game-manager-players';
 const GAMES_KEY = 'game-manager-games';
 const COURTS_KEY = 'game-manager-courts';
@@ -272,17 +274,30 @@ export function useGameManager() {
     setCourts((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
   }, []);
 
-  const enqueueGame = useCallback((playerIds: [string, string, string, string]) => {
-    const newItem: QueueItem = {
-      id: crypto.randomUUID(),
-      playerIds,
-      queuedAt: new Date().toISOString(),
-    };
-    setQueue((prev) => [...prev, newItem]);
-    setPlayers((prev) =>
-      prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'queued' as const, pinned: false } : p)),
-    );
-  }, []);
+  // 게임중인 선수도 다음 대기 게임 하나에는 넣을 수 있다(코트 1 + 대기 1).
+  // 이미 대기 게임에 있는 선수가 끼면 거부한다. 게임중인 선수는 playing을 유지한다(우선순위 playing > queued).
+  const enqueueGame = useCallback(
+    (playerIds: [string, string, string, string]): boolean => {
+      const queuedIds = new Set(queue.flatMap((q) => q.playerIds));
+      if (playerIds.some((id) => queuedIds.has(id))) return false;
+      const playingIds = new Set(courts.flatMap((c) => c.playerIds ?? []));
+      const newItem: QueueItem = {
+        id: crypto.randomUUID(),
+        playerIds,
+        queuedAt: new Date().toISOString(),
+      };
+      setQueue((prev) => [...prev, newItem]);
+      setPlayers((prev) =>
+        prev.map((p) => {
+          if (!playerIds.includes(p.id)) return p;
+          if (playingIds.has(p.id)) return { ...p, pinned: false };
+          return { ...p, status: 'queued' as const, pinned: false };
+        }),
+      );
+      return true;
+    },
+    [queue, courts],
+  );
 
   const removeFromQueue = useCallback(
     (queueItemId: string) => {
@@ -291,16 +306,24 @@ export function useGameManager() {
       const playerIds = item.playerIds;
       setQueue((prev) => prev.filter((q) => q.id !== queueItemId));
       // 대기열 취소는 실제 게임을 뛴 게 아니므로 waitingSince를 유지한다(대기 시간 이어서 누적).
-      setPlayers((prev) => prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const } : p)));
+      const playingIds = new Set(courts.flatMap((c) => c.playerIds ?? []));
+      // 아직 코트에서 게임중인 선수는 playing 그대로 둔다.
+      setPlayers((prev) =>
+        prev.map((p) => (playerIds.includes(p.id) && !playingIds.has(p.id) ? { ...p, status: 'active' as const } : p)),
+      );
     },
-    [queue],
+    [queue, courts],
   );
 
   const assignQueueToCourt = useCallback(
-    (queueItemId: string, courtId: string) => {
+    (queueItemId: string, courtId: string): AssignResult => {
       const item = queue.find((q) => q.id === queueItemId);
-      if (!item) return;
+      if (!item) return { ok: false, busyNames: [] };
       const playerIds = item.playerIds;
+      // 멤버 중 아직 다른 코트에서 게임중인 선수가 있으면 배정하지 않는다(한 사람이 코트 두 곳에 서는 것 방지).
+      const playingIds = new Set(courts.flatMap((c) => c.playerIds ?? []));
+      const busyNames = players.filter((p) => playerIds.includes(p.id) && playingIds.has(p.id)).map((p) => p.name);
+      if (busyNames.length > 0) return { ok: false, busyNames };
       const nowIso = new Date().toISOString();
       const gameId = crypto.randomUUID();
 
@@ -319,8 +342,9 @@ export function useGameManager() {
         prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'playing' as const, waitingSince: null } : p)),
       );
       setGames((prev) => [...prev, { id: gameId, players: playerIds, confirmedAt: nowIso }]);
+      return { ok: true };
     },
-    [queue, players],
+    [queue, players, courts],
   );
 
   const endCourtGame = useCallback(
@@ -334,11 +358,17 @@ export function useGameManager() {
           c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null, gameId: null, prevWaiting: undefined } : c,
         ),
       );
+      // 다음 대기 게임에 이미 들어 있는 선수는 queued, 나머지는 active. 게임을 뛰었으니 대기는 지금부터.
+      const queuedIds = new Set(queue.flatMap((q) => q.playerIds));
       setPlayers((prev) =>
-        prev.map((p) => (playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: nowIso } : p)),
+        prev.map((p) =>
+          playerIds.includes(p.id)
+            ? { ...p, status: queuedIds.has(p.id) ? ('queued' as const) : ('active' as const), waitingSince: nowIso }
+            : p,
+        ),
       );
     },
-    [courts],
+    [courts, queue],
   );
 
   const moveCourtGame = useCallback((fromCourtId: string, toCourtId: string) => {
@@ -386,13 +416,20 @@ export function useGameManager() {
           c.id === courtId ? { ...c, playerIds: null, gameStartedAt: null, gameId: null, prevWaiting: undefined } : c,
         ),
       );
+      const queuedIds = new Set(queue.flatMap((q) => q.playerIds));
       setPlayers((prev) =>
         prev.map((p) =>
-          playerIds.includes(p.id) ? { ...p, status: 'active' as const, waitingSince: prevWaiting[p.id] ?? null } : p,
+          playerIds.includes(p.id)
+            ? {
+                ...p,
+                status: queuedIds.has(p.id) ? ('queued' as const) : ('active' as const),
+                waitingSince: prevWaiting[p.id] ?? null,
+              }
+            : p,
         ),
       );
     },
-    [courts],
+    [courts, queue],
   );
 
   const resetCourts = useCallback(() => {
