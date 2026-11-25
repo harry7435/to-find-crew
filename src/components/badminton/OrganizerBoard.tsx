@@ -49,7 +49,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     setAttending,
     setAttendingBulk,
     removeGame,
-    removeOneTimeGuests,
+    removePlayers,
     resetWaitingTimes,
     resetGames,
     addCourt,
@@ -457,34 +457,42 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     [players, updatePlayer],
   );
 
-  const oneTimeCount = players.filter((p) => p.isOneTime).length;
-
-  const handleRemoveOneTimeGuests = useCallback(async () => {
-    if (oneTimeCount === 0) {
-      toast.error('1회성 게스트가 없습니다');
-      return;
-    }
-    if (
-      await confirm({
-        title: `1회성 게스트 ${oneTimeCount}명을 삭제하시겠습니까?`,
-        description: '게임중이거나 대기열에 있는 사람은 제외됩니다',
-        confirmText: '삭제',
-        variant: 'destructive',
-      })
-    ) {
-      const result = await removeOneTimeGuests();
-      if (!result) return;
-      const { removedIds, skipped } = result;
-      const removed = removedIds.length;
-      // 뽑힌 팀에 실제로 삭제된 사람이 있을 때만 초기화한다 (게임중·대기중이라 남은 사람은 유지).
-      setPickedPlayers((prev) => (prev && prev.some((p) => removedIds.includes(p.id)) ? null : prev));
-      if (skipped > 0) {
-        toast.success(`${removed}명 삭제, 게임중·대기중 ${skipped}명은 남겨 두었습니다`);
-      } else {
-        toast.success(`1회성 게스트 ${removed}명을 삭제했습니다`);
+  // 인원 관리 모달에서 체크한 선수들을 삭제한다. 모달의 선택을 비워도 되면 true.
+  const handleRemoveSelected = useCallback(
+    async (ids: string[]): Promise<boolean> => {
+      if (ids.length === 0) return false;
+      const userCount = players.filter((p) => ids.includes(p.id) && p.participantType === 'user').length;
+      const busyNote = '게임중이거나 대기열에 있는 사람은 제외됩니다';
+      if (
+        !(await confirm({
+          title: `선택한 ${ids.length}명을 삭제하시겠습니까?`,
+          description: userCount > 0 ? `로그인 참가자 ${userCount}명은 모임에서 나가게 됩니다. ${busyNote}` : busyNote,
+          confirmText: '삭제',
+          variant: 'destructive',
+        }))
+      ) {
+        return false;
       }
-    }
-  }, [oneTimeCount, removeOneTimeGuests, confirm]);
+      const result = await removePlayers(ids);
+      if (!result) return false;
+      const { removedIds, skippedBusy, failedIds } = result;
+      removedIds.forEach((id) => removeReady(id));
+      // 뽑힌 팀·직접 고르기에 실제로 삭제된 사람이 있을 때만 초기화한다.
+      setPickedPlayers((prev) => (prev && prev.some((p) => removedIds.includes(p.id)) ? null : prev));
+      setSelectedPlayers((prev) =>
+        prev.some((p) => removedIds.includes(p.id)) ? prev.filter((p) => !removedIds.includes(p.id)) : prev,
+      );
+      if (removedIds.length > 0 || failedIds.length === 0) {
+        toast.success(
+          `${removedIds.length}명을 삭제했습니다` +
+            (skippedBusy.length > 0 ? `, 게임중·대기중 ${skippedBusy.length}명은 남겨 두었습니다` : ''),
+        );
+      }
+      if (failedIds.length > 0) toast.error(`${failedIds.length}명은 삭제하지 못했습니다. 다시 시도해주세요`);
+      return true;
+    },
+    [players, confirm, removePlayers, removeReady],
+  );
 
   const handleResetAttendance = useCallback(async () => {
     if (!players.some((p) => p.attending)) {
@@ -788,7 +796,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
         onEditPlayer={handleEditPlayer}
         onRemovePlayer={handleRemovePlayer}
         onToggleOneTime={handleToggleOneTime}
-        onRemoveOneTimeGuests={handleRemoveOneTimeGuests}
+        onRemoveSelected={handleRemoveSelected}
       />
 
       <AttendancePickerModal

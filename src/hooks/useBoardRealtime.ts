@@ -445,42 +445,67 @@ export function useBoardRealtime(sessionId: string) {
     [loadSnapshot, fail],
   );
 
-  // 1회성 게스트 중 게임중/대기열에 있는 사람은 남긴다. 바쁜 사람은 스냅샷이 아니라 board_games에서
-  // 삭제 직전에 다시 조회한다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
-  const removeOneTimeGuests = useCallback(async (): Promise<{ removedIds: string[]; skipped: number } | null> => {
-    const { data: rows, error: selectError } = await supabase
-      .from('guest_participants')
-      .select('id')
-      .eq('session_id', sessionId)
-      .eq('is_one_time', true);
-    if (selectError) {
-      await fail('1회성 게스트 삭제에 실패했습니다', selectError);
-      return null;
-    }
-    const allIds = (rows ?? []).map((r) => r.id as string);
-    if (allIds.length === 0) {
-      await loadSnapshot();
-      return { removedIds: [], skipped: 0 };
-    }
-    const { busy, error: busyError } = await fetchBusyPlayers(sessionId, allIds);
-    if (!busy) {
-      await fail('1회성 게스트 삭제에 실패했습니다', busyError);
-      return null;
-    }
-    const ids = allIds.filter((id) => !busy.playing.has(id) && !busy.queued.has(id));
-    let removedIds: string[] = [];
-    if (ids.length > 0) {
-      const { data: deleted, error } = await supabase.from('guest_participants').delete().in('id', ids).select('id');
-      if (error) {
-        await fail('1회성 게스트 삭제에 실패했습니다', error);
+  // 선택한 선수를 한꺼번에 삭제한다. 게임중/대기열에 있는 사람은 스냅샷이 아니라 board_games에서
+  // 삭제 직전에 다시 조회해 건너뛴다. 삭제는 id 목록으로만 해서 그 사이 새로 표시된 사람을 건드리지 않는다.
+  const removePlayers = useCallback(
+    async (ids: string[]): Promise<{ removedIds: string[]; skippedBusy: string[]; failedIds: string[] } | null> => {
+      if (ids.length === 0) return { removedIds: [], skippedBusy: [], failedIds: [] };
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids);
+      if (!busy) {
+        await fail('선수 삭제에 실패했습니다', busyError);
         return null;
       }
-      // 실제로 지워진 행 기준으로 센다 (다른 운영자가 먼저 지웠을 수 있음).
-      removedIds = (deleted ?? []).map((r) => r.id as string);
-    }
-    await loadSnapshot();
-    return { removedIds, skipped: allIds.length - removedIds.length };
-  }, [sessionId, loadSnapshot, fail]);
+      const skippedBusy = ids.filter((id) => busy.playing.has(id) || busy.queued.has(id));
+      const targets = ids.filter((id) => !skippedBusy.includes(id));
+      const isUserId = (id: string) => playersRef.current.find((p) => p.id === id)?.participantType === 'user';
+      const guestIds = targets.filter((id) => !isUserId(id));
+      const userIds = targets.filter(isUserId);
+
+      let removedIds: string[] = [];
+      if (guestIds.length > 0) {
+        const { data: deleted, error } = await supabase
+          .from('guest_participants')
+          .delete()
+          .in('id', guestIds)
+          .eq('session_id', sessionId)
+          .select('id');
+        if (error) {
+          await fail('선수 삭제에 실패했습니다', error);
+          return null;
+        }
+        // 실제로 지워진 행 기준으로 센다 (다른 운영자가 먼저 지웠을 수 있음).
+        removedIds = (deleted ?? []).map((r) => r.id as string);
+      }
+
+      const failedIds: string[] = [];
+      const userResults = await Promise.all(
+        userIds.map(async (id) => {
+          // fetch는 오프라인이면 응답 대신 예외를 던진다.
+          const ok = await fetch('/api/badminton/sessions/remove-participant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, participant_id: id, participant_type: 'user' }),
+          })
+            .then((response) => {
+              if (!response.ok) recordApiFailure('POST', '/api/badminton/sessions/remove-participant', response.status);
+              return response.ok;
+            })
+            .catch(() => {
+              recordApiFailure('POST', '/api/badminton/sessions/remove-participant', 'network');
+              return false;
+            });
+          return { id, ok };
+        }),
+      );
+      for (const { id, ok } of userResults) {
+        if (ok) removedIds.push(id);
+        else failedIds.push(id);
+      }
+      await loadSnapshot();
+      return { removedIds, skippedBusy, failedIds };
+    },
+    [sessionId, loadSnapshot, fail],
+  );
 
   const resetWaitingTimes = useCallback(async (): Promise<boolean> => {
     const nowIso = new Date().toISOString();
@@ -795,7 +820,7 @@ export function useBoardRealtime(sessionId: string) {
     setAttending,
     setAttendingBulk,
     removeGame,
-    removeOneTimeGuests,
+    removePlayers,
     resetWaitingTimes,
     resetGames,
     addCourt,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,7 +23,8 @@ interface RosterManageModalProps {
   onEditPlayer: (player: Player) => void;
   onRemovePlayer: (id: string) => void;
   onToggleOneTime: (id: string) => void;
-  onRemoveOneTimeGuests: () => void;
+  /** 선택한 id를 삭제한다. true면 모달의 선택을 비운다. */
+  onRemoveSelected: (ids: string[]) => Promise<boolean>;
 }
 
 const FILTERS: { key: RosterFilter; label: string }[] = [
@@ -39,6 +40,10 @@ const EMPTY_MESSAGES: Record<RosterFilter, string> = {
   oneTime: '1회성 게스트가 없어요',
   user: '로그인한 참가자가 없어요',
 };
+
+function isBusy(p: Player): boolean {
+  return p.status === 'playing' || p.status === 'queued';
+}
 
 function isUser(p: Player): boolean {
   return p.participantType === 'user';
@@ -95,9 +100,20 @@ export default function RosterManageModal({
   onEditPlayer,
   onRemovePlayer,
   onToggleOneTime,
-  onRemoveOneTimeGuests,
+  onRemoveSelected,
 }: RosterManageModalProps) {
   const [filter, setFilter] = useState<RosterFilter>('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  // 사라졌거나 게임중/대기열이 된 선수는 선택에서 뺀다.
+  useEffect(() => {
+    const selectable = new Set(players.filter((p) => !isBusy(p)).map((p) => p.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => selectable.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [players]);
 
   const counts: Record<RosterFilter, number> = {
     all: players.length,
@@ -107,9 +123,44 @@ export default function RosterManageModal({
   };
 
   const visible = players.filter((p) => matches(p, filter)).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const selectableVisible = visible.filter((p) => !isBusy(p));
+  const selectedVisibleCount = selectableVisible.filter((p) => selected.has(p.id)).length;
+  const allVisibleSelected = selectableVisible.length > 0 && selectedVisibleCount === selectableVisible.length;
+
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const toggleAllVisible = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const p of selectableVisible) {
+        if (allVisibleSelected) next.delete(p.id);
+        else next.add(p.id);
+      }
+      return next;
+    });
+
+  const handleClose = () => {
+    setSelected(new Set());
+    onClose();
+  };
+
+  const handleRemoveSelected = async () => {
+    if (isRemoving || selected.size === 0) return;
+    setIsRemoving(true);
+    try {
+      if (await onRemoveSelected([...selected])) setSelected(new Set());
+    } finally {
+      setIsRemoving(false);
+    }
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="flex flex-col gap-0 p-0 h-[85vh] max-h-[85vh] max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none sm:max-w-lg">
         <DialogHeader className="shrink-0 px-4 pt-4 pb-3 pr-12">
           <DialogTitle>인원 관리</DialogTitle>
@@ -132,16 +183,44 @@ export default function RosterManageModal({
           </div>
         </div>
 
+        <div className="shrink-0 flex items-center gap-3 border-t px-4 py-2 text-xs text-gray-600">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
+              }}
+              disabled={selectableVisible.length === 0}
+              onChange={toggleAllVisible}
+              className="h-3.5 w-3.5"
+            />
+            전체 선택
+          </label>
+          <span className="text-gray-400">{selected.size}명 선택됨</span>
+        </div>
+
         <div className="flex-1 min-h-0 overflow-y-auto border-y divide-y">
           {visible.length === 0 ? (
             <div className="text-center py-10 text-sm text-gray-500">{EMPTY_MESSAGES[filter]}</div>
           ) : (
             visible.map((p) => {
-              const busy = p.status === 'playing' || p.status === 'queued';
+              const busy = isBusy(p);
               const user = isUser(p);
               return (
                 <div key={p.id} className="flex items-center gap-2 pl-4 pr-2 py-2">
-                  <div className="flex flex-1 min-w-0 items-center gap-1.5 flex-wrap">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.id)}
+                    disabled={busy}
+                    onChange={() => toggleOne(p.id)}
+                    aria-label={`${p.name} 선택`}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                  <div
+                    className={`flex flex-1 min-w-0 items-center gap-1.5 flex-wrap ${busy ? '' : 'cursor-pointer'}`}
+                    onClick={() => !busy && toggleOne(p.id)}
+                  >
                     <span className="font-medium truncate">{p.name}</span>
                     <span className={`shrink-0 ${getGenderColor(p.gender)}`}>{getGenderIcon(p.gender)}</span>
                     {p.skillLevel && <Badge className={getSkillLevelColor(p.skillLevel)}>{p.skillLevel}</Badge>}
@@ -204,8 +283,13 @@ export default function RosterManageModal({
             <UserPlus className="h-3.5 w-3.5 mr-1" />
             선수 등록
           </Button>
-          <Button variant="destructive" size="sm" onClick={onRemoveOneTimeGuests} disabled={counts.oneTime === 0}>
-            1회성 게스트 {counts.oneTime}명 삭제
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleRemoveSelected}
+            disabled={selected.size === 0 || isRemoving}
+          >
+            선택 삭제 ({selected.size}명)
           </Button>
         </div>
       </DialogContent>

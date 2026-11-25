@@ -48,11 +48,12 @@ purpose.
   set it (`PlayerForm`/`PlayerAddModal`/`PlayerEditModal` take an opt-in `showOneTime` prop, so
   `/game-manager` is unchanged). Logged-in participants never get it — `updatePlayer()` ignores
   `isOneTime` for `participantType === 'user'`.
-- `removeOneTimeGuests()` (the "1회성 게스트 N명 삭제" footer button of the 인원 관리 modal,
-  `RosterManageModal.tsx`; no longer in the settings sheet) deletes by explicit id list and skips anyone in a `playing`
-  or `queued` `board_games` row. Busy players come from a DB query right before the delete
-  (`fetchBusyPlayers`), not from the snapshot, for the same reason as the other writes in
-  `game-manager-board-conventions.md`.
+- Bulk delete is checkbox selection in the 인원 관리 modal (`RosterManageModal.tsx`; "선택 삭제 (N명)" footer
+  button → `removePlayers(ids)`). The one-time cleanup path is the 1회성 tab + "전체 선택" (applies to the
+  visible, non-busy rows). It deletes by explicit id list (guests via one `.in('id', ids)` delete,
+  logged-in users via the remove-participant API) and skips anyone in a `playing` or `queued`
+  `board_games` row. Busy players come from a DB query right before the delete (`fetchBusyPlayers`), not
+  from the snapshot, for the same reason as the other writes in `game-manager-board-conventions.md`.
 - Known race: between the `board_games` busy check and the delete, another organizer can queue one of
   those guests, leaving a deleted id in a queued game. Same class of gap as `removePlayer`; the proper
   fix is an RPC doing check + delete in one transaction. Accepted for now.
