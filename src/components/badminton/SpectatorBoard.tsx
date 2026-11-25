@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,8 @@ function getStatusBadge(player: Player) {
 export default function SpectatorBoard({ sessionId, myParticipantId = null }: SpectatorBoardProps) {
   const { players, courts, queue, games, isLoading } = useBoardSpectator(sessionId);
   const now = useTicker();
+  // 게임중이면서 대기 게임에도 든 선수 — 저장 상태는 playing이라 별도 배지로 보여준다(읽기 전용)
+  const queuedPlayerIds = useMemo(() => new Set(queue.flatMap((q) => q.playerIds)), [queue]);
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   // 모바일에서는 한 번에 한 섹션만 보여준다.
   type SpectatorSection = 'courts' | 'queue' | 'waiting';
@@ -251,21 +253,33 @@ export default function SpectatorBoard({ sessionId, myParticipantId = null }: Sp
                 <p className="text-sm text-gray-500 text-center py-4">운영진이 팀을 짜면 여기에 순서가 표시돼요</p>
               ) : (
                 <div className="space-y-2">
-                  {queue.map((item, idx) => (
-                    <div key={item.id} className="border border-purple-200 bg-purple-50 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-purple-100 text-purple-800 border-purple-300 text-xs">#{idx + 1}</Badge>
-                        <Badge variant="outline" className="bg-white text-purple-700 border-purple-200 text-xs">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {formatElapsed(item.queuedAt, now) ?? '방금'}
-                        </Badge>
+                  {queue.map((item, idx) => {
+                    // 다른 코트에서 아직 게임중인 멤버 — 왜 아직 배정되지 않는지 보여준다
+                    const busyNames = item.playerIds
+                      .map(getPlayer)
+                      .filter((p) => p.status === 'playing')
+                      .map((p) => p.name);
+                    return (
+                      <div key={item.id} className="border border-purple-200 bg-purple-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-300 text-xs">#{idx + 1}</Badge>
+                          <Badge variant="outline" className="bg-white text-purple-700 border-purple-200 text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {formatElapsed(item.queuedAt, now) ?? '방금'}
+                          </Badge>
+                        </div>
+                        <TeamCourtBox
+                          players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
+                          size="compact"
+                        />
+                        {busyNames.length > 0 && (
+                          <p className="text-xs text-green-700 mt-2">
+                            게임중: {busyNames.join(', ')} · 끝나면 배정할 수 있어요
+                          </p>
+                        )}
                       </div>
-                      <TeamCourtBox
-                        players={item.playerIds.map(getPlayer) as [Player, Player, Player, Player]}
-                        size="compact"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -349,6 +363,11 @@ export default function SpectatorBoard({ sessionId, myParticipantId = null }: Sp
                         </Badge>
                       )}
                       {getStatusBadge(player)}
+                      {player.status === 'playing' && queuedPlayerIds.has(player.id) && (
+                        <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300 text-xs">
+                          다음 대기
+                        </Badge>
+                      )}
                       <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-gray-500">
                         {gameCounts.get(player.id) ?? 0}게임
                       </span>

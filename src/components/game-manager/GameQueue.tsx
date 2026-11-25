@@ -58,6 +58,11 @@ export default function GameQueue({
           {queue.map((item, idx) => {
             const waitingLabel = formatElapsed(item.queuedAt, now);
             const isHighlighted = highlight?.id === item.id;
+            // 다른 코트에서 아직 게임중인 멤버 — 이 게임을 왜 지금 배정할 수 없는지 보여준다
+            const busyNames = item.playerIds
+              .map(getPlayer)
+              .filter((p) => p.status === 'playing')
+              .map((p) => p.name);
             return (
               <motion.div
                 key={item.id}
@@ -110,6 +115,11 @@ export default function GameQueue({
                     size="compact"
                   />
                 </div>
+                {busyNames.length > 0 && (
+                  <p className="text-xs text-green-700 mb-2">
+                    게임중: {busyNames.join(', ')} · 끝나면 배정할 수 있어요
+                  </p>
+                )}
                 {freeCourts.length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-1">
                     빈 코트가 없습니다. 게임 종료 또는 코트 추가 필요

@@ -112,6 +112,9 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
     toast.success(`대기열 ${idx + 1}번째로 추가했어요`);
   }, [pendingEnqueue, queue, flashQueue]);
 
+  // 대기 게임에 속한 선수 — 직접 선택에서 중복 대기를 막는다
+  const queuedPlayerIds = useMemo(() => new Set(queue.flatMap((q) => q.playerIds)), [queue]);
+
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
     games.forEach((game) => {
@@ -604,6 +607,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
                 readyIds={readyIds}
+                queuedPlayerIds={queuedPlayerIds}
                 onToggleReady={toggleReady}
               />
             </TabsContent>
@@ -619,6 +623,7 @@ export default function OrganizerBoard({ sessionId, isMoreSheetOpen, onMoreSheet
                   onCancel={handleCustomCancel}
                   isEditingSelection={isEditingCustomPick}
                   onEditingSelectionChange={setIsEditingCustomPick}
+                  queuedPlayerIds={queuedPlayerIds}
                   boundedOnDesktop
                   isSubmitting={isSubmittingGame}
                 />

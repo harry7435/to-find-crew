@@ -43,6 +43,33 @@ async function updatePlayerStates(participantIds: string[], updates: PlayerState
   return results.every(Boolean);
 }
 
+type BusyPlayers = { playing: Set<string>; queued: Set<string> };
+
+// 주어진 선수 중 이미 게임중/대기 게임에 들어 있는 선수를 DB에서 찾는다. 다른 운영자가 방금 바꾼
+// 상태까지 반영하려고 스냅샷이 아니라 쓰기 직전에 조회한다. excludeGameId는 지금 다루는 게임 자신을 뺀다.
+async function fetchBusyPlayers(
+  sessionId: string,
+  playerIds: string[],
+  excludeGameId?: string,
+): Promise<{ busy: BusyPlayers; error: null } | { busy: null; error: unknown }> {
+  let query = supabase
+    .from('board_games')
+    .select('id, status, player_ids')
+    .eq('session_id', sessionId)
+    .in('status', ['queued', 'playing'])
+    .overlaps('player_ids', playerIds);
+  if (excludeGameId) query = query.neq('id', excludeGameId);
+  const { data, error } = await query;
+  if (error) return { busy: null, error };
+  const busy: BusyPlayers = { playing: new Set(), queued: new Set() };
+  for (const game of data ?? []) {
+    for (const id of game.player_ids as string[]) {
+      if (playerIds.includes(id)) (game.status === 'playing' ? busy.playing : busy.queued).add(id);
+    }
+  }
+  return { busy, error: null };
+}
+
 /**
  * 모든 쓰기 동작은 성공 여부(boolean)를 돌려준다. 실패하면 훅이 직접 에러 토스트를 띄우고
  * 스냅샷을 다시 받아 화면을 서버 상태에 맞추므로, 호출부는 true일 때만 성공 토스트를 띄우면 된다.
@@ -59,6 +86,7 @@ export function useBoardRealtime(sessionId: string) {
   const [isLoading, setIsLoading] = useState(true);
   const playersRef = useRef<Player[]>([]);
   playersRef.current = players;
+  const namesOf = (ids: string[]) => ids.map((id) => playersRef.current.find((p) => p.id === id)?.name ?? '알 수 없음');
 
   const loadSnapshot = useCallback(async () => {
     const results = await Promise.all([
@@ -474,6 +502,12 @@ export function useBoardRealtime(sessionId: string) {
 
   const enqueueGame = useCallback(
     async (playerIds: [string, string, string, string]): Promise<boolean> => {
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, playerIds);
+      if (busyError || !busy) return fail('대기열 추가에 실패했습니다', busyError);
+      // 코트 1 + 대기 1 — 이미 대기 게임에 있는 선수가 끼면 거부한다(정상 흐름이라 Sentry 보고 없음)
+      if (playerIds.some((id) => busy.queued.has(id))) return fail('이미 대기열에 있는 선수가 있습니다');
+      // 게임중인 선수는 playing을 유지한다(우선순위 playing > queued). 나머지만 queued로.
+      const toQueue = playerIds.filter((id) => !busy.playing.has(id));
       const nowIso = new Date().toISOString();
       const { data: game, error } = await supabase
         .from('board_games')
@@ -483,13 +517,20 @@ export function useBoardRealtime(sessionId: string) {
       if (error || !game) {
         return fail('대기열 추가에 실패했습니다', error ?? new Error('no row returned'));
       }
-      if (!(await updatePlayerStates(playerIds, { player_status: 'queued', pinned: false }))) {
+      if (!(await updatePlayerStates(toQueue, { player_status: 'queued', pinned: false }))) {
         // 게임 행만 남기고 실패로 알리면 다시 확정했을 때 같은 4명이 대기열에 두 번 들어간다.
         // 넣은 게임을 지우고 선수 상태를 되돌려 "아무 일도 없던 상태"로 맞춘다(되돌리기도 최선 노력).
+        // 이 동작이 queued로 바꾼 선수(toQueue)만 되돌린다 — 게임중 선수는 건드리지 않는다.
         await supabase.from('board_games').delete().eq('id', game.id);
-        await updatePlayerStates(playerIds, { player_status: 'active' });
+        await updatePlayerStates(toQueue, { player_status: 'active' });
         return fail('대기열 추가에 실패했습니다. 다시 시도해주세요');
       }
+      // 게임중 선수의 pinned 해제(useGameManager와 동일). 표시용 부가 상태라 실패해도 대기열 추가는
+      // 되돌리지 않는다 — 되돌리면 오히려 성공한 toQueue 쓰기까지 흔들려 복구가 더 복잡해진다.
+      await updatePlayerStates(
+        playerIds.filter((id) => busy.playing.has(id)),
+        { pinned: false },
+      );
       await loadSnapshot();
       return true;
     },
@@ -509,10 +550,15 @@ export function useBoardRealtime(sessionId: string) {
       if (!item) {
         return fail('이미 처리된 대기열입니다');
       }
+      const ids = item.player_ids as string[];
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids, queueItemId);
+      if (busyError || !busy) return fail('대기열 취소에 실패했습니다', busyError);
+      // 아직 코트에서 게임중인 선수는 playing 그대로 둔다
+      const toActive = ids.filter((id) => !busy.playing.has(id));
       // 선수 상태를 먼저 되돌리고 게임 행을 지운다. 반대 순서로 하다 중간에 끊기면 게임 행은
       // 사라졌는데 선수는 queued로 남아, 다시 취소할 대상이 없어 복구할 수 없다.
       // 대기열 취소는 실제 게임을 뛴 게 아니므로 waiting_since를 유지한다(대기 시간 이어서 누적).
-      if (!(await updatePlayerStates(item.player_ids as string[], { player_status: 'active' }))) {
+      if (!(await updatePlayerStates(toActive, { player_status: 'active' }))) {
         return fail('대기열 취소에 실패했습니다. 다시 시도해주세요');
       }
       const { error } = await supabase.from('board_games').delete().eq('id', queueItemId);
@@ -522,7 +568,7 @@ export function useBoardRealtime(sessionId: string) {
       await loadSnapshot();
       return true;
     },
-    [loadSnapshot, fail],
+    [sessionId, loadSnapshot, fail],
   );
 
   const assignQueueToCourt = useCallback(
@@ -539,6 +585,12 @@ export function useBoardRealtime(sessionId: string) {
       if (!item) {
         return fail('이미 처리된 대기열입니다');
       }
+      const ids = item.player_ids as string[];
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids, queueItemId);
+      if (busyError || !busy) return fail('코트 배정에 실패했습니다', busyError);
+      // 다른 코트에서 아직 게임중인 멤버가 있으면 배정하지 않는다(한 사람이 코트 두 곳에 서는 것 방지)
+      const busyIds = ids.filter((id) => busy.playing.has(id));
+      if (busyIds.length > 0) return fail(`${namesOf(busyIds).join(', ')}님이 아직 게임중입니다`);
       const { error } = await supabase
         .from('board_games')
         .update({ court_id: courtId, status: 'playing', started_at: nowIso })
@@ -548,13 +600,13 @@ export function useBoardRealtime(sessionId: string) {
       }
       // 여기서 실패하면 게임은 코트에 올라갔는데 선수는 queued로 남는다. 그 코트의 게임을
       // 종료/취소하면 선수 상태가 다시 맞춰지므로 복구할 수 있다.
-      if (!(await updatePlayerStates(item.player_ids as string[], { player_status: 'playing', waiting_since: null }))) {
+      if (!(await updatePlayerStates(ids, { player_status: 'playing', waiting_since: null }))) {
         return fail('코트에는 배정됐지만 선수 상태 반영에 실패했습니다. 화면을 확인해주세요');
       }
       await loadSnapshot();
       return true;
     },
-    [loadSnapshot, fail],
+    [sessionId, loadSnapshot, fail],
   );
 
   const endCourtGame = useCallback(
@@ -574,8 +626,15 @@ export function useBoardRealtime(sessionId: string) {
       const nowIso = new Date().toISOString();
       // 선수 상태를 먼저 되돌리고 게임 행을 완료 처리한다. 반대 순서로 하다 중간에 끊기면 게임은
       // 완료됐는데 선수는 playing으로 남아, 다시 종료할 게임이 없어 복구할 수 없다.
+      const ids = game.player_ids as string[];
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids, game.id);
+      if (busyError || !busy) return fail('게임 종료에 실패했습니다', busyError);
+      // 다음 대기 게임에 이미 들어 있는 선수는 queued, 나머지는 active
+      const toQueued = ids.filter((id) => busy.queued.has(id));
+      const toActive = ids.filter((id) => !busy.queued.has(id));
       if (
-        !(await updatePlayerStates(game.player_ids as string[], { player_status: 'active', waiting_since: nowIso }))
+        !(await updatePlayerStates(toQueued, { player_status: 'queued', waiting_since: nowIso })) ||
+        !(await updatePlayerStates(toActive, { player_status: 'active', waiting_since: nowIso }))
       ) {
         return fail('게임 종료에 실패했습니다. 다시 시도해주세요');
       }
@@ -589,7 +648,7 @@ export function useBoardRealtime(sessionId: string) {
       await loadSnapshot();
       return true;
     },
-    [loadSnapshot, fail],
+    [sessionId, loadSnapshot, fail],
   );
 
   const cancelCourtGame = useCallback(
@@ -608,8 +667,15 @@ export function useBoardRealtime(sessionId: string) {
       }
       const nowIso = new Date().toISOString();
       // endCourtGame과 같은 이유로 선수 상태를 먼저 되돌린 뒤 게임 행을 지운다.
+      const ids = game.player_ids as string[];
+      const { busy, error: busyError } = await fetchBusyPlayers(sessionId, ids, game.id);
+      if (busyError || !busy) return fail('게임 취소에 실패했습니다', busyError);
+      // 다음 대기 게임에 이미 들어 있는 선수는 queued, 나머지는 active
+      const toQueued = ids.filter((id) => busy.queued.has(id));
+      const toActive = ids.filter((id) => !busy.queued.has(id));
       if (
-        !(await updatePlayerStates(game.player_ids as string[], { player_status: 'active', waiting_since: nowIso }))
+        !(await updatePlayerStates(toQueued, { player_status: 'queued', waiting_since: nowIso })) ||
+        !(await updatePlayerStates(toActive, { player_status: 'active', waiting_since: nowIso }))
       ) {
         return fail('게임 취소에 실패했습니다. 다시 시도해주세요');
       }
@@ -620,7 +686,7 @@ export function useBoardRealtime(sessionId: string) {
       await loadSnapshot();
       return true;
     },
-    [loadSnapshot, fail],
+    [sessionId, loadSnapshot, fail],
   );
 
   const moveCourtGame = useCallback(

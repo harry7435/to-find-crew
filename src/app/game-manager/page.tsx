@@ -115,6 +115,9 @@ export default function GameManagerPage() {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // 대기 게임에 속한 선수 — 직접 선택에서 중복 대기를 막는다
+  const queuedPlayerIds = useMemo(() => new Set(queue.flatMap((q) => q.playerIds)), [queue]);
+
   const playerGameCounts = useMemo(() => {
     const counts = new Map<string, number>();
     games.forEach((game) => {
@@ -195,7 +198,10 @@ export default function GameManagerPage() {
     if (!pickedPlayers) return;
 
     const playerIds = pickedPlayers.map((p) => p.id) as [string, string, string, string];
-    enqueueGame(playerIds);
+    if (!enqueueGame(playerIds)) {
+      toast.error('이미 대기열에 있는 선수가 있습니다');
+      return;
+    }
 
     setPendingEnqueue(playerIds);
     setPickedPlayers(null);
@@ -204,7 +210,11 @@ export default function GameManagerPage() {
 
   const handleAssignQueueToCourt = useCallback(
     (queueItemId: string, courtId: string) => {
-      assignQueueToCourt(queueItemId, courtId);
+      const result = assignQueueToCourt(queueItemId, courtId);
+      if (!result.ok) {
+        if (result.busyNames.length > 0) toast.error(`${result.busyNames.join(', ')}님이 아직 게임중입니다`);
+        return;
+      }
       const court = courts.find((c) => c.id === courtId);
       setOpenSections((prev) => ({ ...prev, courtManager: true }));
       setMobileTab('courts');
@@ -323,7 +333,10 @@ export default function GameManagerPage() {
   const handleCustomConfirm = useCallback(() => {
     if (selectedPlayers.length !== 4) return;
     const playerIds = selectedPlayers.map((p) => p.id) as [string, string, string, string];
-    enqueueGame(playerIds);
+    if (!enqueueGame(playerIds)) {
+      toast.error('이미 대기열에 있는 선수가 있습니다');
+      return;
+    }
     setPendingEnqueue(playerIds);
     setIsCustomPicking(false);
     setPickedPlayers(null);
@@ -638,6 +651,7 @@ export default function GameManagerPage() {
                 onFilterChange={setAttendanceFilter}
                 gameCountsMap={playerGameCounts}
                 readyIds={readyIds}
+                queuedPlayerIds={queuedPlayerIds}
                 onToggleReady={toggleReady}
               />
             </CardContent>
@@ -710,6 +724,7 @@ export default function GameManagerPage() {
                   onCancel={handleCustomCancel}
                   isEditingSelection={isEditingCustomPick}
                   onEditingSelectionChange={setIsEditingCustomPick}
+                  queuedPlayerIds={queuedPlayerIds}
                 />
               ) : (
                 <TeamPicker

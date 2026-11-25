@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { registerPlayers, addCourt, noHorizontalScroll, gotoTab } from './helpers';
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -172,4 +172,114 @@ test('데스크톱: 하단 탭 바 없음, 섹션 모두 보임', async ({ page 
   await expect(chip).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
+});
+
+test.describe('게임중 선수를 다음 대기열에', () => {
+  // 8명 등록 → 코트 2개 → 랜덤 4명을 코트 1에 배정해 게임중으로 만든다
+  async function setupOneCourtPlaying(page: Page, testInfo: TestInfo) {
+    await registerPlayers(page, ['가', '나', '다', '라', '마', '바', '사', '아']);
+    await gotoTab(page, testInfo, '코트');
+    await addCourt(page);
+    await addCourt(page);
+    await gotoTab(page, testInfo, '팀뽑기');
+    await page.getByRole('button', { name: '랜덤 뽑기 🎲' }).click();
+    await page.getByRole('button', { name: '확정' }).filter({ visible: true }).first().click();
+    await gotoTab(page, testInfo, '대기');
+    await page
+      .getByRole('button', { name: /코트 1/ })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(page.getByText('코트 1에서 게임을 시작했어요')).toBeVisible();
+  }
+
+  // 직접 선택에서 게임중 1명 + 쉬는 3명을 골라 확정한다
+  async function enqueueOnePlayingThreeActive(page: Page, testInfo: TestInfo) {
+    await gotoTab(page, testInfo, '팀뽑기');
+    await page.getByRole('button', { name: '직접 선택' }).click();
+    const picker = page.locator('div.rounded-xl.border').filter({ hasText: '활성 선수 선택' });
+    const playingGroup = picker.getByRole('group', { name: '게임중 — 끝나면 바로 다음 게임' });
+    // 전제: 토글이 꺼져 있으면 게임중 묶음이 없다
+    await expect(playingGroup).toHaveCount(0);
+    await picker.getByRole('checkbox', { name: '게임중인 선수 포함' }).check();
+    await expect(playingGroup.locator('button:visible')).toHaveCount(4);
+    await playingGroup.locator('button:visible').first().click();
+    const activeGroup = picker.getByRole('group', { name: '쉬는 선수' });
+    const activeCards = activeGroup.locator('button:visible');
+    await activeCards.nth(0).click();
+    await activeCards.nth(1).click();
+    await activeCards.nth(2).click();
+    // 4명이 차면 목록이 미리보기로 바뀌고 확정이 켜진다
+    const confirm = page.getByRole('button', { name: '확정' }).filter({ visible: true }).last();
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+    // 준비 단계의 같은 문구 토스트가 아직 남아 있을 수 있어 마지막 것을 본다
+    await expect(page.getByText('대기열 1번째로 추가했어요').last()).toBeVisible();
+  }
+
+  test('게임중 선수가 든 대기 게임은 그 게임이 끝나야 배정된다', async ({ page }, testInfo) => {
+    await setupOneCourtPlaying(page, testInfo);
+    await enqueueOnePlayingThreeActive(page, testInfo);
+
+    await gotoTab(page, testInfo, '인원');
+    // 게임중이면서 대기 중인 선수는 게임중으로만 센다
+    await expect(page.getByText(/게임중\s*4명/)).toBeVisible();
+    await expect(page.getByText(/대기열\s*3명/)).toBeVisible();
+    await expect(page.getByText('다음 대기', { exact: true }).filter({ visible: true })).toHaveCount(1);
+
+    await gotoTab(page, testInfo, '대기');
+    await expect(page.getByText(/^게임중: .+ · 끝나면 배정할 수 있어요$/).filter({ visible: true })).toHaveCount(1);
+    const assignToCourt2 = page.getByRole('button', { name: /코트 2/ }).filter({ visible: true });
+    await assignToCourt2.first().click();
+    await expect(page.getByText(/님이 아직 게임중입니다$/)).toBeVisible();
+    // 배정이 거부됐으므로 대기 항목이 그대로 있다
+    await expect(assignToCourt2.first()).toBeVisible();
+
+    await gotoTab(page, testInfo, '코트');
+    await page.getByRole('button', { name: '게임 종료' }).first().click();
+    await page.getByRole('button', { name: '종료', exact: true }).click();
+
+    await gotoTab(page, testInfo, '인원');
+    // 코트 1 게임이 끝나도 대기열에 있는 그 선수는 대기열로 남는다
+    await expect(page.getByText(/대기열\s*4명/)).toBeVisible();
+    await expect(page.getByText('다음 대기', { exact: true }).filter({ visible: true })).toHaveCount(0);
+
+    await gotoTab(page, testInfo, '대기');
+    await expect(page.getByText(/^게임중: /).filter({ visible: true })).toHaveCount(0);
+    await page
+      .getByRole('button', { name: /코트 1/ })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(page.getByText('코트 1에서 게임을 시작했어요').last()).toBeVisible();
+  });
+
+  test('대기 취소해도 게임중 선수는 게임중으로 남는다', async ({ page }, testInfo) => {
+    await setupOneCourtPlaying(page, testInfo);
+    await enqueueOnePlayingThreeActive(page, testInfo);
+    await gotoTab(page, testInfo, '대기');
+    await page.getByTitle('대기 취소').click();
+    await page.getByRole('alertdialog').or(page.getByRole('dialog')).getByRole('button', { name: '대기 취소' }).click();
+    await gotoTab(page, testInfo, '인원');
+    await expect(page.getByText(/게임중\s*4명/)).toBeVisible();
+    await expect(page.getByText(/대기열\s*\d+명/)).toHaveCount(0);
+  });
+
+  test('이미 대기열에 있는 선수는 목록에 없고, 토글을 끄면 고른 게임중 선수가 빠진다', async ({ page }, testInfo) => {
+    await setupOneCourtPlaying(page, testInfo);
+    await enqueueOnePlayingThreeActive(page, testInfo);
+    await gotoTab(page, testInfo, '팀뽑기');
+    await page.getByRole('button', { name: '직접 선택' }).click();
+    const picker = page.locator('div.rounded-xl.border').filter({ hasText: '활성 선수 선택' });
+    await picker.getByRole('checkbox', { name: '게임중인 선수 포함' }).check();
+    const playingGroup = picker.getByRole('group', { name: '게임중 — 끝나면 바로 다음 게임' });
+    // 게임중 4명 중 1명은 이미 대기열에 있으므로 3명만
+    await expect(playingGroup.locator('button:visible')).toHaveCount(3);
+    // 쉬는 선수 8-4-3 = 1명
+    await expect(picker.getByRole('group', { name: '쉬는 선수' }).locator('button:visible')).toHaveCount(1);
+    await playingGroup.locator('button:visible').first().click();
+    await expect(page.getByText('1/4 선택')).toBeVisible();
+    await picker.getByRole('checkbox', { name: '게임중인 선수 포함' }).uncheck();
+    await expect(page.getByText('0/4 선택')).toBeVisible();
+  });
 });
